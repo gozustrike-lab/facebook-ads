@@ -1,0 +1,1204 @@
+     1→// ImmiScale Meta Engine v5 - Servicio de Integración Meta Graph API
+     2→// Módulo central para todas las llamadas a la API de Meta/Facebook
+     3→// Todos los comentarios y textos en español
+     4→
+     5→import { db } from '@/lib/db'
+     6→
+     7→// =============================================
+     8→// TIPOS E INTERFACES
+     9→// =============================================
+    10→
+    11→/** Campaña de Meta Ads */
+    12→export interface MetaCampaign {
+    13→  id: string
+    14→  name: string
+    15→  objective: string
+    16→  status: 'ACTIVE' | 'PAUSED' | 'DELETED' | 'ARCHIVED'
+    17→  effective_status: string[]
+    18→  daily_budget?: string
+    19→  lifetime_budget?: string
+    20→  spend_cap?: string
+    21→  created_time: string
+    22→  updated_time: string
+    23→  [key: string]: unknown
+    24→}
+    25→
+    26→/** Conjunto de anuncios (AdSet) de Meta */
+    27→export interface MetaAdSet {
+    28→  id: string
+    29→  name: string
+    30→  campaign_id: string
+    31→  status: 'ACTIVE' | 'PAUSED' | 'DELETED'
+    32→  daily_budget?: string
+    33→  lifetime_budget?: string
+    34→  targeting?: MetaTargeting
+    35→  optimization_goal: string
+    36→  billing_event: string
+    37→  bid_amount?: number
+    38→  created_time: string
+    39→  updated_time: string
+    40→  [key: string]: unknown
+    41→}
+    42→
+    43→/** Configuración de targeting para adsets */
+    44→export interface MetaTargeting {
+    45→  geo_locations?: {
+    46→    countries?: string[]
+    47→    regions?: Array<{ key: string; name: string }>
+    48→    cities?: Array<{ key: string; name: string; radius: number }>
+    49→  }
+    50→  age_min?: number
+    51→  age_max?: number
+    52→  genders?: number[] // 1=masculino, 2=femenino
+    53→  interests?: Array<{ id: string; name: string }>
+    54→  behaviors?: Array<{ id: string; name: string }>
+    55→  custom_audiences?: Array<{ id: string; name: string }>
+    56→  lookalike_audiences?: Array<{ id: string; name: string }>
+    57→  exclusions?: Record<string, unknown>
+    58→}
+    59→
+    60→/** Métricas de rendimiento de Meta Insights */
+    61→export interface MetaInsight {
+    62→  date_start: string
+    63→  date_stop: string
+    64→  impressions: string
+    65→  clicks: string
+    66→  spend: string
+    67→  reach: string
+    68→  frequency: string
+    69→  cpc: string
+    70→  cpm: string
+    71→  ctr: string
+    72→  cost_per_action_type?: Array<{ action_type: string; value: string }>
+    73→  actions?: Array<{ action_type: string; value: string }>
+    74→  [key: string]: unknown
+    75→}
+    76→
+    77→/** Payload de evento para Conversions API (CAPI) */
+    78→export interface CAPIEventPayload {
+    79→  event_name: string
+    80→  event_time: number
+    81→  event_id: string
+    82→  event_source_url?: string
+    83→  action_source: 'website' | 'email' | 'app' | 'phone_call' | 'chat' | 'physical_store' | 'system_generated' | 'other'
+    84→  user_data: {
+    85→    em?: string[]    // correos hasheados (SHA-256)
+    86→    ph?: string[]    // teléfonos hasheados
+    87→    fn?: string[]    // nombre hasheado
+    88→    ln?: string[]    // apellido hasheado
+    89→    ct?: string[]    // ciudad hasheada
+    90→    st?: string[]    // estado/estado hasheado
+    91→    zp?: string[]    // código postal hasheado
+    92→    country?: string[] // país hasheado
+    93→    client_ip_address?: string
+    94→    client_user_agent?: string
+    95→    fbc?: string     // Facebook Click ID
+    96→    fbp?: string     // Facebook Browser ID
+    97→    external_id?: string[]
+    98→  }
+    99→  custom_data?: Record<string, unknown>
+   100→}
+   101→
+   102→/** Resultado del envío de eventos CAPI */
+   103→export interface CAPIResponse {
+   104→  events_received: number
+   105→  messages: Array<{ message: string; code: number }>
+   106→  fbtrace_id: string
+   107→  [key: string]: unknown
+   108→}
+   109→
+   110→/** Resultado de búsqueda de targeting */
+   111→export interface MetaTargetingResult {
+   112→  id: string
+   113→  name: string
+   114→  type: string
+   115→  audience_size?: number
+   116→  path?: string[]
+   117→  [key: string]: unknown
+   118→}
+   119→
+   120→/** Audiencia personalizada de Meta */
+   121→export interface MetaCustomAudience {
+   122→  id: string
+   123→  name: string
+   124→  subtype?: string
+   125→  description?: string
+   126→  customer_count?: number
+   127→  [key: string]: unknown
+   128→}
+   129→
+   130→/** Parámetros para crear campaña */
+   131→export interface CreateCampaignParams {
+   132→  name: string
+   133→  objective: string
+   134→  status?: 'ACTIVE' | 'PAUSED'
+   135→  daily_budget?: string
+   136→  lifetime_budget?: string
+   137→  spend_cap?: string
+   138→  special_ad_categories?: string[]
+   139→  [key: string]: unknown
+   140→}
+   141→
+   142→/** Parámetros para actualizar campaña */
+   143→export interface UpdateCampaignParams {
+   144→  name?: string
+   145→  status?: 'ACTIVE' | 'PAUSED' | 'DELETED' | 'ARCHIVED'
+   146→  daily_budget?: string
+   147→  lifetime_budget?: string
+   148→  spend_cap?: string
+   149→  [key: string]: unknown
+   150→}
+   151→
+   152→/** Parámetros para crear adset */
+   153→export interface CreateAdSetParams {
+   154→  name: string
+   155→  campaign_id: string
+   156→  status?: 'ACTIVE' | 'PAUSED'
+   157→  daily_budget?: string
+   158→  lifetime_budget?: string
+   159→  targeting?: MetaTargeting
+   160→  optimization_goal: string
+   161→  billing_event: string
+   162→  bid_amount?: number
+   163→  [key: string]: unknown
+   164→}
+   165→
+   166→/** Parámetros para actualizar adset */
+   167→export interface UpdateAdSetParams {
+   168→  name?: string
+   169→  status?: 'ACTIVE' | 'PAUSED' | 'DELETED'
+   170→  daily_budget?: string
+   171→  lifetime_budget?: string
+   172→  targeting?: MetaTargeting
+   173→  bid_amount?: number
+   174→  [key: string]: unknown
+   175→}
+   176→
+   177→/** Parámetros para obtener insights */
+   178→export interface InsightParams {
+   179→  fields?: string[]
+   180→  date_preset?: string
+   181→  time_range?: { since: string; until: string }
+   182→  breakdowns?: string[]
+   183→  level?: 'ad' | 'adset' | 'campaign' | 'account'
+   184→  filtering?: Array<{ field: string; operator: string; value: string }>
+   185→  limit?: number
+   186→  [key: string]: unknown
+   187→}
+   188→
+   189→/** Parámetros para crear audiencia personalizada */
+   190→export interface CreateCustomAudienceParams {
+   191→  name: string
+   192→  description?: string
+   193→  subtype?: string
+   194→  customer_file_source?: string
+   195→  [key: string]: unknown
+   196→}
+   197→
+   198→/** Resultado del intercambio de token */
+   199→export interface TokenExchangeResult {
+   200→  access_token: string
+   201→  token_type: string
+   202→  expires_in: number
+   203→  [key: string]: unknown
+   204→}
+   205→
+   206→/** Resultado de verificación de token */
+   207→export interface TokenVerificationResult {
+   208→  valid: boolean
+   209→  expiresAt?: string
+   210→  error?: string
+   211→  data?: {
+   212→    user_id?: string
+   213→    app_id?: string
+   214→    scopes?: string[]
+   215→  }
+   216→}
+   217→
+   218→/** Información de depuración de token */
+   219→export interface TokenDebugInfo {
+   220→  data: {
+   221→    app_id: string
+   222→    type: string
+   223→    application: string
+   224→    expires_at: number
+   225→    is_valid: boolean
+   226→    scopes: string[]
+   227→    user_id?: string
+   228→    profile_id?: string
+   229→    error?: {
+   230→      message: string
+   231→      type: string
+   232→      code: number
+   233→    }
+   234→  }
+   235→}
+   236→
+   237→/** Resultado de prueba de conexión */
+   238→export interface ConnectionTestResult {
+   239→  connected: boolean
+   240→  accountId?: string
+   241→  accountName?: string
+   242→  currency?: string
+   243→  timezone?: string
+   244→  error?: string
+   245→}
+   246→
+   247→// =============================================
+   248→// ERROR PERSONALIZADO DE META API
+   249→// =============================================
+   250→
+   251→/** Error específico de la API de Meta con detalles del error */
+   252→export class MetaAPIError extends Error {
+   253→  public readonly type: string
+   254→  public readonly code: number
+   255→  public readonly errorSubcode: number
+   256→  public readonly fbtraceId: string
+   257→
+   258→  constructor(metaError: { message: string; type: string; code: number; error_subcode: number; fbtrace_id: string }) {
+   259→    super(metaError.message)
+   260→    this.name = 'MetaAPIError'
+   261→    this.type = metaError.type
+   262→    this.code = metaError.code
+   263→    this.errorSubcode = metaError.error_subcode
+   264→    this.fbtraceId = metaError.fbtrace_id
+   265→  }
+   266→}
+   267→
+   268→// =============================================
+   269→// UTILIDADES DE HASH
+   270→// =============================================
+   271→
+   272→/**
+   273→ * Hashea un valor con SHA-256 según lo requerido por Meta CAPI.
+   274→ * Los datos de usuario deben enviarse en minúsculas y sin espacios al inicio/fin.
+   275→ */
+   276→export async function hashSHA256(value: string): Promise<string> {
+   277→  const encoder = new TextEncoder()
+   278→  const data = encoder.encode(value.trim().toLowerCase())
+   279→  const hash = await crypto.subtle.digest('SHA-256', data)
+   280→  return Array.from(new Uint8Array(hash))
+   281→    .map((b) => b.toString(16).padStart(2, '0'))
+   282→    .join('')
+   283→}
+   284→
+   285→/**
+   286→ * Hashea todos los datos de usuario para CAPI.
+   287→ * Convierte cada campo en su hash SHA-256 según las especificaciones de Meta.
+   288→ */
+   289→export async function hashUserData(userData: CAPIEventPayload['user_data']): Promise<CAPIEventPayload['user_data']> {
+   290→  const hashed: CAPIEventPayload['user_data'] = {}
+   291→
+   292→  // Campos que deben ser hasheados como arrays de strings
+   293→  const camposHashear = ['em', 'ph', 'fn', 'ln', 'ct', 'st', 'zp', 'country'] as const
+   294→
+   295→  for (const campo of camposHashear) {
+   296→    const valores = userData[campo]
+   297→    if (valores && valores.length > 0) {
+   298→      const valoresHasheados: string[] = []
+   299→      for (const valor of valores) {
+   300→        valoresHasheados.push(await hashSHA256(valor))
+   301→      }
+   302→      ;(hashed as Record<string, string[]>)[campo] = valoresHasheados
+   303→    }
+   304→  }
+   305→
+   306→  // Campos que NO se hashean (se pasan tal cual)
+   307→  if (userData.client_ip_address) hashed.client_ip_address = userData.client_ip_address
+   308→  if (userData.client_user_agent) hashed.client_user_agent = userData.client_user_agent
+   309→  if (userData.fbc) hashed.fbc = userData.fbc
+   310→  if (userData.fbp) hashed.fbp = userData.fbp
+   311→  if (userData.external_id) hashed.external_id = userData.external_id
+   312→
+   313→  return hashed
+   314→}
+   315→
+   316→// =============================================
+   317→// CONFIGURACIÓN POR DEFECTO
+   318→// =============================================
+   319→
+   320→const GRAPH_VERSION_DEFAULT = 'v21.0'
+   321→const BASE_URL_DEFAULT = `https://graph.facebook.com/${GRAPH_VERSION_DEFAULT}/`
+   322→const MAX_REINTENTOS = 3
+   323→const RETRASO_BASE_MS = 1000
+   324→
+   325→/** Campos por defecto para campañas */
+   326→const CAMPAIGN_FIELDS_DEFAULT = [
+   327→  'id', 'name', 'objective', 'status', 'effective_status',
+   328→  'daily_budget', 'lifetime_budget', 'spend_cap',
+   329→  'created_time', 'updated_time',
+   330→]
+   331→
+   332→/** Campos por defecto para adsets */
+   333→const ADSET_FIELDS_DEFAULT = [
+   334→  'id', 'name', 'campaign_id', 'status',
+   335→  'daily_budget', 'lifetime_budget', 'targeting',
+   336→  'optimization_goal', 'billing_event', 'bid_amount',
+   337→  'created_time', 'updated_time',
+   338→]
+   339→
+   340→/** Campos por defecto para insights */
+   341→const INSIGHT_FIELDS_DEFAULT = [
+   342→  'impressions', 'clicks', 'spend', 'reach', 'frequency',
+   343→  'cpc', 'cpm', 'ctr', 'cost_per_action_type', 'actions',
+   344→]
+   345→
+   346→// =============================================
+   347→// SERVICIO PRINCIPAL
+   348→// =============================================
+   349→
+   350→/**
+   351→ * Servicio principal de integración con Meta Graph API.
+   352→ * Maneja todas las operaciones: campañas, adsets, insights, CAPI, targeting,
+   353→ * audiencias personalizadas, lookalike y gestión de tokens.
+   354→ */
+   355→export class MetaAPIService {
+   356→  private accessToken: string
+   357→  private adAccountId: string
+   358→  private pixelId: string
+   359→  private graphVersion: string
+   360→  private baseUrl: string
+   361→  private appId: string
+   362→  private appSecret: string
+   363→
+   364→  constructor(config: {
+   365→    accessToken: string
+   366→    adAccountId: string
+   367→    pixelId: string
+   368→    graphVersion?: string
+   369→    appId?: string
+   370→    appSecret?: string
+   371→  }) {
+   372→    this.accessToken = config.accessToken
+   373→    this.adAccountId = config.adAccountId
+   374→    this.pixelId = config.pixelId
+   375→    this.graphVersion = config.graphVersion || GRAPH_VERSION_DEFAULT
+   376→    this.baseUrl = `https://graph.facebook.com/${this.graphVersion}/`
+   377→    this.appId = config.appId || ''
+   378→    this.appSecret = config.appSecret || ''
+   379→  }
+   380→
+   381→  // =============================================
+   382→  // FÁBRICAS ESTÁTICAS
+   383→  // =============================================
+   384→
+   385→  /**
+   386→   * Crea una instancia del servicio desde las credenciales almacenadas en la base de datos.
+   387→   * Retorna null si no hay credenciales configuradas.
+   388→   */
+   389→  static async fromDatabase(): Promise<MetaAPIService | null> {
+   390→    try {
+   391→      const credencial = await db.metaCredential.findFirst()
+   392→      if (!credencial || !credencial.accessToken) {
+   393→        console.log('[MetaAPI] No se encontraron credenciales en la base de datos')
+   394→        return null
+   395→      }
+   396→
+   397→      return new MetaAPIService({
+   398→        accessToken: credencial.accessToken,
+   399→        adAccountId: credencial.accountId || '',
+   400→        pixelId: credencial.pixelId || '',
+   401→        graphVersion: credencial.graphApiVersion || GRAPH_VERSION_DEFAULT,
+   402→        appId: credencial.appId,
+   403→        appSecret: credencial.appSecret,
+   404→      })
+   405→    } catch (error) {
+   406→      console.error('[MetaAPI] Error al cargar credenciales desde la BD:', error)
+   407→      return null
+   408→    }
+   409→  }
+   410→
+   411→  /**
+   412→   * Crea una instancia del servicio desde las variables de entorno.
+   413→   * Retorna null si las variables requeridas no están definidas.
+   414→   */
+   415→  static fromEnv(): MetaAPIService | null {
+   416→    const accessToken = process.env.META_ACCESS_TOKEN
+   417→    const adAccountId = process.env.META_AD_ACCOUNT_ID
+   418→    const pixelId = process.env.META_PIXEL_ID || ''
+   419→
+   420→    if (!accessToken || !adAccountId) {
+   421→      console.log('[MetaAPI] Variables de entorno META_ACCESS_TOKEN o META_AD_ACCOUNT_ID no configuradas')
+   422→      return null
+   423→    }
+   424→
+   425→    return new MetaAPIService({
+   426→      accessToken,
+   427→      adAccountId,
+   428→      pixelId,
+   429→      appId: process.env.META_APP_ID || '',
+   430→      appSecret: process.env.META_APP_SECRET || '',
+   431→    })
+   432→  }
+   433→
+   434→  // =============================================
+   435→  // MÉTODO CENTRAL DE LLAMADAS API
+   436→  // =============================================
+   437→
+   438→  /**
+   439→   * Método central para todas las llamadas a la Graph API de Meta.
+   440→   * Incluye: autenticación automática, reintentos con backoff exponencial,
+   441→   * manejo de rate limiting (HTTP 429), y parseo de errores de Meta.
+   442→   */
+   443→  private async apiCall<T>(
+   444→    endpoint: string,
+   445→    method: 'GET' | 'POST' | 'DELETE',
+   446→    params: Record<string, unknown> = {}
+   447→  ): Promise<T> {
+   448→    // Incluir access_token en todos los requests
+   449→    const parametrosConToken = { ...params, access_token: this.accessToken }
+   450→
+   451→    let ultimoError: Error | null = null
+   452→
+   453→    // Reintentos con backoff exponencial
+   454→    for (let intento = 0; intento < MAX_REINTENTOS; intento++) {
+   455→      try {
+   456→        let url: string
+   457→        let opciones: RequestInit
+   458→
+   459→        if (method === 'GET') {
+   460→          // Para GET, los parámetros van en la URL
+   461→          const searchParams = new URLSearchParams()
+   462→          for (const [clave, valor] of Object.entries(parametrosConToken)) {
+   463→            if (valor !== undefined && valor !== null) {
+   464→              if (typeof valor === 'object') {
+   465→                searchParams.set(clave, JSON.stringify(valor))
+   466→              } else {
+   467→                searchParams.set(clave, String(valor))
+   468→              }
+   469→            }
+   470→          }
+   471→          url = `${this.baseUrl}${endpoint}?${searchParams.toString()}`
+   472→          opciones = { method: 'GET' }
+   473→        } else {
+   474→          // Para POST/DELETE, parámetros en el body como form-data
+   475→          url = `${this.baseUrl}${endpoint}`
+   476→          const formData = new URLSearchParams()
+   477→          for (const [clave, valor] of Object.entries(parametrosConToken)) {
+   478→            if (valor !== undefined && valor !== null) {
+   479→              if (typeof valor === 'object') {
+   480→                formData.set(clave, JSON.stringify(valor))
+   481→              } else {
+   482→                formData.set(clave, String(valor))
+   483→              }
+   484→            }
+   485→          }
+   486→          opciones = {
+   487→            method,
+   488→            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+   489→            body: formData.toString(),
+   490→          }
+   491→        }
+   492→
+   493→        // Registro de la llamada para depuración
+   494→        console.log(`[MetaAPI] ${method} ${endpoint} (intento ${intento + 1}/${MAX_REINTENTOS})`)
+   495→
+   496→        const respuesta = await fetch(url, opciones)
+   497→
+   498→        // Manejo de rate limiting (HTTP 429)
+   499→        if (respuesta.status === 429) {
+   500→          const retraso = RETRASO_BASE_MS * Math.pow(2, intento)
+   501→          console.warn(`[MetaAPI] Rate limit alcanzado. Reintentando en ${retraso}ms...`)
+   502→          await this.dormir(retraso)
+   503→          continue
+   504→        }
+   505→
+   506→        // Manejo de error de token expirado
+   507→        if (respuesta.status === 401) {
+   508→          console.error('[MetaAPI] Token de acceso expirado o inválido')
+   509→          await this.marcarTokenExpirado()
+   510→          throw new MetaAPIError({
+   511→            message: 'Token de acceso expirado o inválido',
+   512→            type: 'OAuthException',
+   513→            code: 190,
+   514→            error_subcode: 463,
+   515→            fbtrace_id: '',
+   516→          })
+   517→        }
+   518→
+   519→        const datos = await respuesta.json()
+   520→
+   521→        // Verificar si Meta retornó un error en la respuesta
+   522→        if (datos.error) {
+   523→          const metaError = datos.error
+   524→          console.error(`[MetaAPI] Error de Meta API: ${metaError.message} (código: ${metaError.code})`)
+   525→
+   526→          // Errores temporales que merecen reintento
+   527→          if (this.esErrorTemporal(metaError.code, metaError.error_subcode)) {
+   528→            const retraso = RETRASO_BASE_MS * Math.pow(2, intento)
+   529→            console.warn(`[MetaAPI] Error temporal, reintentando en ${retraso}ms...`)
+   530→            await this.dormir(retraso)
+   531→            ultimoError = new MetaAPIError(metaError)
+   532→            continue
+   533→          }
+   534→
+   535→          throw new MetaAPIError(metaError)
+   536→        }
+   537→
+   538→        return datos as T
+   539→      } catch (error) {
+   540→        if (error instanceof MetaAPIError) {
+   541→          ultimoError = error
+   542→          if (intento < MAX_REINTENTOS - 1) {
+   543→            const retraso = RETRASO_BASE_MS * Math.pow(2, intento)
+   544→            console.warn(`[MetaAPI] Reintentando en ${retraso}ms...`)
+   545→            await this.dormir(retraso)
+   546→            continue
+   547→          }
+   548→        } else {
+   549→          ultimoError = error instanceof Error ? error : new Error(String(error))
+   550→          console.error(`[MetaAPI] Error en llamada: ${ultimoError.message}`)
+   551→          if (intento < MAX_REINTENTOS - 1) {
+   552→            const retraso = RETRASO_BASE_MS * Math.pow(2, intento)
+   553→            await this.dormir(retraso)
+   554→            continue
+   555→          }
+   556→        }
+   557→      }
+   558→    }
+   559→
+   560→    throw ultimoError || new Error('Error desconocido en llamada a Meta API')
+   561→  }
+   562→
+   563→  // =============================================
+   564→  // CAMPAÑAS
+   565→  // =============================================
+   566→
+   567→  /**
+   568→   * Obtener lista de campañas de la cuenta de anuncios.
+   569→   * GET /{ad_account_id}/campaigns
+   570→   */
+   571→  async getCampaigns(fields?: string[]): Promise<MetaCampaign[]> {
+   572→    const campos = fields || CAMPAIGN_FIELDS_DEFAULT
+   573→    const resultado = await this.apiCall<{ data: MetaCampaign[] }>(
+   574→      `${this.adAccountId}/campaigns`,
+   575→      'GET',
+   576→      { fields: campos.join(',') }
+   577→    )
+   578→    return resultado.data || []
+   579→  }
+   580→
+   581→  /**
+   582→   * Crear una nueva campaña en Meta.
+   583→   * POST /{ad_account_id}/campaigns
+   584→   */
+   585→  async createCampaign(data: CreateCampaignParams): Promise<MetaCampaign> {
+   586→    return this.apiCall<MetaCampaign>(
+   587→      `${this.adAccountId}/campaigns`,
+   588→      'POST',
+   589→      { ...data }
+   590→    )
+   591→  }
+   592→
+   593→  /**
+   594→   * Obtener detalles de una campaña específica.
+   595→   * GET /{campaign_id}
+   596→   */
+   597→  async getCampaign(campaignId: string, fields?: string[]): Promise<MetaCampaign> {
+   598→    const campos = fields || CAMPAIGN_FIELDS_DEFAULT
+   599→    return this.apiCall<MetaCampaign>(
+   600→      campaignId,
+   601→      'GET',
+   602→      { fields: campos.join(',') }
+   603→    )
+   604→  }
+   605→
+   606→  /**
+   607→   * Actualizar una campaña (pausar, activar, cambiar presupuesto, etc.).
+   608→   * POST /{campaign_id}
+   609→   */
+   610→  async updateCampaign(campaignId: string, data: UpdateCampaignParams): Promise<MetaCampaign> {
+   611→    return this.apiCall<MetaCampaign>(
+   612→      campaignId,
+   613→      'POST',
+   614→      { ...data }
+   615→    )
+   616→  }
+   617→
+   618→  // =============================================
+   619→  // ADSETS
+   620→  // =============================================
+   621→
+   622→  /**
+   623→   * Obtener lista de adsets de una campaña.
+   624→   * GET /{campaign_id}/adsets
+   625→   */
+   626→  async getAdSets(campaignId: string, fields?: string[]): Promise<MetaAdSet[]> {
+   627→    const campos = fields || ADSET_FIELDS_DEFAULT
+   628→    const resultado = await this.apiCall<{ data: MetaAdSet[] }>(
+   629→      `${campaignId}/adsets`,
+   630→      'GET',
+   631→      { fields: campos.join(',') }
+   632→    )
+   633→    return resultado.data || []
+   634→  }
+   635→
+   636→  /**
+   637→   * Crear un nuevo adset con configuración de targeting.
+   638→   * POST /{ad_account_id}/adsets
+   639→   */
+   640→  async createAdSet(data: CreateAdSetParams): Promise<MetaAdSet> {
+   641→    const params: Record<string, unknown> = {
+   642→      name: data.name,
+   643→      campaign_id: data.campaign_id,
+   644→      optimization_goal: data.optimization_goal,
+   645→      billing_event: data.billing_event,
+   646→    }
+   647→    if (data.status) params.status = data.status
+   648→    if (data.daily_budget) params.daily_budget = data.daily_budget
+   649→    if (data.lifetime_budget) params.lifetime_budget = data.lifetime_budget
+   650→    if (data.targeting) params.targeting = data.targeting
+   651→    if (data.bid_amount) params.bid_amount = data.bid_amount
+   652→
+   653→    return this.apiCall<MetaAdSet>(
+   654→      `${this.adAccountId}/adsets`,
+   655→      'POST',
+   656→      params
+   657→    )
+   658→  }
+   659→
+   660→  /**
+   661→   * Actualizar un adset (presupuesto, estado, targeting).
+   662→   * POST /{adset_id}
+   663→   */
+   664→  async updateAdSet(adsetId: string, data: UpdateAdSetParams): Promise<MetaAdSet> {
+   665→    return this.apiCall<MetaAdSet>(
+   666→      adsetId,
+   667→      'POST',
+   668→      { ...data }
+   669→    )
+   670→  }
+   671→
+   672→  // =============================================
+   673→  // INSIGHTS / MÉTRICAS
+   674→  // =============================================
+   675→
+   676→  /**
+   677→   * Obtener métricas de rendimiento de un objeto (campaña, adset, anuncio).
+   678→   * GET /{object_id}/insights
+   679→   */
+   680→  async getInsights(objectId: string, params: InsightParams): Promise<MetaInsight[]> {
+   681→    const parametros: Record<string, unknown> = {}
+   682→
+   683→    // Campos de métricas
+   684→    if (params.fields) {
+   685→      parametros.fields = params.fields.join(',')
+   686→    } else {
+   687→      parametros.fields = INSIGHT_FIELDS_DEFAULT.join(',')
+   688→    }
+   689→
+   690→    // Rango de fechas
+   691→    if (params.time_range) {
+   692→      parametros.time_range = JSON.stringify(params.time_range)
+   693→    } else if (params.date_preset) {
+   694→      parametros.date_preset = params.date_preset
+   695→    }
+   696→
+   697→    // Nivel de desglose
+   698→    if (params.level) parametros.level = params.level
+   699→    if (params.breakdowns) parametros.breakdowns = params.breakdowns.join(',')
+   700→    if (params.filtering) parametros.filtering = JSON.stringify(params.filtering)
+   701→    if (params.limit) parametros.limit = params.limit
+   702→
+   703→    const resultado = await this.apiCall<{ data: MetaInsight[] }>(
+   704→      `${objectId}/insights`,
+   705→      'GET',
+   706→      parametros
+   707→    )
+   708→    return resultado.data || []
+   709→  }
+   710→
+   711→  /**
+   712→   * Obtener insights a nivel de cuenta de anuncios.
+   713→   * GET /{ad_account_id}/insights
+   714→   */
+   715→  async getAccountInsights(dateRange: { from: string; to: string }): Promise<MetaInsight[]> {
+   716→    return this.getInsights(this.adAccountId, {
+   717→      fields: INSIGHT_FIELDS_DEFAULT,
+   718→      time_range: { since: dateRange.from, until: dateRange.to },
+   719→      level: 'account',
+   720→    })
+   721→  }
+   722→
+   723→  // =============================================
+   724→  // CAPI (Conversions API)
+   725→  // =============================================
+   726→
+   727→  /**
+   728→   * Enviar eventos de conversión a Meta a través de CAPI.
+   729→   * POST /{pixel_id}/events
+   730→   * Los datos de usuario deben ser hasheados previamente con hashUserData().
+   731→   */
+   732→  async sendCAPIEvents(events: CAPIEventPayload[]): Promise<CAPIResponse> {
+   733→    if (!this.pixelId) {
+   734→      throw new Error('Pixel ID no configurado. No se pueden enviar eventos CAPI.')
+   735→    }
+   736→
+   737→    return this.apiCall<CAPIResponse>(
+   738→      `${this.pixelId}/events`,
+   739→      'POST',
+   740→      { data: JSON.stringify(events) }
+   741→    )
+   742→  }
+   743→
+   744→  // =============================================
+   745→  // TARGETING
+   746→  // =============================================
+   747→
+   748→  /**
+   749→   * Buscar opciones de targeting (países, ciudades, intereses, comportamientos).
+   750→   * GET /search
+   751→   */
+   752→  async searchTargeting(params: {
+   753→    type: string
+   754→    q: string
+   755→    country_codes?: string[]
+   756→  }): Promise<MetaTargetingResult[]> {
+   757→    const parametros: Record<string, unknown> = {
+   758→      type: params.type,
+   759→      q: params.q,
+   760→    }
+   761→    if (params.country_codes) {
+   762→      parametros.country_codes = JSON.stringify(params.country_codes)
+   763→    }
+   764→
+   765→    const resultado = await this.apiCall<{ data: MetaTargetingResult[] }>(
+   766→      'search',
+   767→      'GET',
+   768→      parametros
+   769→    )
+   770→    return resultado.data || []
+   771→  }
+   772→
+   773→  /**
+   774→   * Obtener audiencias recomendadas para el vertical de inmigración/legal.
+   775→   * Busca intereses y comportamientos relevantes para servicios de inmigración
+   776→   * en el país especificado.
+   777→   */
+   778→  async getImmigrationAudiences(countryCode: string): Promise<MetaTargetingResult[]> {
+   779→    // Términos de búsqueda relevantes para servicios de inmigración
+   780→    const terminosBusqueda = [
+   781→      'inmigración',
+   782→      'visa',
+   783→      'ciudadanía',
+   784→      'pasaporte',
+   785→      'asilo político',
+   786→      'greencard',
+   787→      'abogado de inmigración',
+   788→      'trámite migratorio',
+   789→      'residencia permanente',
+   790→    ]
+   791→
+   792→    const todasAudiencias: MetaTargetingResult[] = []
+   793→
+   794→    for (const termino of terminosBusqueda) {
+   795→      try {
+   796→        const resultados = await this.searchTargeting({
+   797→          type: 'adinterest',
+   798→          q: termino,
+   799→          country_codes: [countryCode],
+   800→        })
+   801→        todasAudiencias.push(...resultados)
+   802→      } catch (error) {
+   803→        console.warn(`[MetaAPI] Error buscando audiencia para "${termino}":`, error)
+   804→      }
+   805→    }
+   806→
+   807→    // Eliminar duplicados por ID
+   808→    const audienciasUnicas = new Map<string, MetaTargetingResult>()
+   809→    for (const audiencia of todasAudiencias) {
+   810→      if (!audienciasUnicas.has(audiencia.id)) {
+   811→        audienciasUnicas.set(audiencia.id, audiencia)
+   812→      }
+   813→    }
+   814→
+   815→    return Array.from(audienciasUnicas.values())
+   816→  }
+   817→
+   818→  // =============================================
+   819→  // AUDIENCIAS PERSONALIZADAS / LOOKALIKE
+   820→  // =============================================
+   821→
+   822→  /**
+   823→   * Crear una audiencia personalizada.
+   824→   * POST /{ad_account_id}/customaudiences
+   825→   */
+   826→  async createCustomAudience(data: CreateCustomAudienceParams): Promise<MetaCustomAudience> {
+   827→    return this.apiCall<MetaCustomAudience>(
+   828→      `${this.adAccountId}/customaudiences`,
+   829→      'POST',
+   830→      { ...data }
+   831→    )
+   832→  }
+   833→
+   834→  /**
+   835→   * Crear una audiencia lookalike basada en una audiencia fuente.
+   836→   * POST /{ad_account_id}/customaudiences
+   837→   */
+   838→  async createLookalikeAudience(
+   839→    sourceAudienceId: string,
+   840→    countryCode: string
+   841→  ): Promise<MetaCustomAudience> {
+   842→    return this.apiCall<MetaCustomAudience>(
+   843→      `${this.adAccountId}/customaudiences`,
+   844→      'POST',
+   845→      {
+   846→        name: `Lookalike - ${countryCode} - ${new Date().toISOString().split('T')[0]}`,
+   847→        subtype: 'LOOKALIKE',
+   848→        origin_audience_id: sourceAudienceId,
+   849→        lookalike_spec: JSON.stringify({
+   850→          type: 'similarity',
+   851→          country: countryCode,
+   852→          ratio: 0.01, // 1% de la población
+   853→        }),
+   854→      }
+   855→    )
+   856→  }
+   857→
+   858→  // =============================================
+   859→  // GESTIÓN DE TOKENS
+   860→  // =============================================
+   861→
+   862→  /**
+   863→   * Intercambiar un token de corta duración por uno de larga duración (60 días).
+   864→   * GET /oauth/access_token
+   865→   */
+   866→  async exchangeToken(shortLivedToken: string): Promise<TokenExchangeResult> {
+   867→    if (!this.appId || !this.appSecret) {
+   868→      throw new Error('App ID y App Secret son requeridos para intercambiar tokens')
+   869→    }
+   870→
+   871→    const url = `${this.baseUrl}oauth/access_token?` +
+   872→      `grant_type=fb_exchange_token&` +
+   873→      `client_id=${this.appId}&` +
+   874→      `client_secret=${this.appSecret}&` +
+   875→      `fb_exchange_token=${shortLivedToken}`
+   876→
+   877→    console.log('[MetaAPI] Intercambiando token de corta duración por uno de larga duración')
+   878→
+   879→    const respuesta = await fetch(url, { method: 'GET' })
+   880→    const datos = await respuesta.json()
+   881→
+   882→    if (datos.error) {
+   883→      throw new MetaAPIError(datos.error)
+   884→    }
+   885→
+   886→    return datos as TokenExchangeResult
+   887→  }
+   888→
+   889→  /**
+   890→   * Verificar la validez del token de acceso actual.
+   891→   * Realiza una llamada a /me para confirmar que el token sigue activo.
+   892→   */
+   893→  async verifyToken(): Promise<TokenVerificationResult> {
+   894→    try {
+   895→      const resultado = await this.apiCall<{ id: string; name?: string }>('me', 'GET')
+   896→
+   897→      return {
+   898→        valid: true,
+   899→        data: {
+   900→          user_id: resultado.id,
+   901→        },
+   902→      }
+   903→    } catch (error) {
+   904→      const mensaje = error instanceof MetaAPIError ? error.message : 'Error desconocido'
+   905→      return {
+   906→        valid: false,
+   907→        error: mensaje,
+   908→      }
+   909→    }
+   910→  }
+   911→
+   912→  /**
+   913→   * Depurar un token para obtener información de scopes y detalles.
+   914→   * GET /debug_token
+   915→   * Si no se proporciona inputToken, se depura el token de acceso actual.
+   916→   */
+   917→  async debugToken(inputToken?: string): Promise<TokenDebugInfo> {
+   918→    const tokenADepurar = inputToken || this.accessToken
+   919→
+   920→    return this.apiCall<TokenDebugInfo>(
+   921→      'debug_token',
+   922→      'GET',
+   923→      { input_token: tokenADepurar }
+   924→    )
+   925→  }
+   926→
+   927→  // =============================================
+   928→  // UTILIDADES
+   929→  // =============================================
+   930→
+   931→  /**
+   932→   * Probar la conexión con Meta y retornar información de la cuenta.
+   933→   */
+   934→  async testConnection(): Promise<ConnectionTestResult> {
+   935→    try {
+   936→      // Intentar obtener información de la cuenta de anuncios
+   937→      const resultado = await this.apiCall<{
+   938→        id: string
+   939→        name: string
+   940→        currency: string
+   941→        timezone_name: string
+   942→      }>(this.adAccountId, 'GET', {
+   943→        fields: 'id,name,currency,timezone_name',
+   944→      })
+   945→
+   946→      return {
+   947→        connected: true,
+   948→        accountId: resultado.id,
+   949→        accountName: resultado.name,
+   950→        currency: resultado.currency,
+   951→        timezone: resultado.timezone_name,
+   952→      }
+   953→    } catch (error) {
+   954→      const mensaje = error instanceof MetaAPIError ? error.message : 'Error de conexión desconocido'
+   955→      return {
+   956→        connected: false,
+   957→        error: mensaje,
+   958→      }
+   959→    }
+   960→  }
+   961→
+   962→  /**
+   963→   * Sincronizar campañas desde Meta a la base de datos local.
+   964→   * Crea campañas nuevas y actualiza las existentes.
+   965→   */
+   966→  async syncCampaignsToDb(): Promise<{ synced: number; created: number; updated: number }> {
+   967→    let sincronizadas = 0
+   968→    let creadas = 0
+   969→    let actualizadas = 0
+   970→
+   971→    try {
+   972→      const campanasMeta = await this.getCampaigns()
+   973→      sincronizadas = campanasMeta.length
+   974→
+   975→      for (const campanaMeta of campanasMeta) {
+   976→        // Buscar si ya existe una campaña local con este ID de Meta
+   977→        const campanaExistente = await db.campaign.findFirst({
+   978→          where: { metaCampaignId: campanaMeta.id },
+   979→        })
+   980→
+   981→        if (campanaExistente) {
+   982→          // Actualizar campaña existente
+   983→          await db.campaign.update({
+   984→            where: { id: campanaExistente.id },
+   985→            data: {
+   986→              name: campanaMeta.name,
+   987→              objective: campanaMeta.objective,
+   988→              status: campanaMeta.status,
+   989→              totalBudget: campanaMeta.daily_budget
+   990→                ? parseFloat(campanaMeta.daily_budget) / 100
+   991→                : campanaMeta.lifetime_budget
+   992→                  ? parseFloat(campanaMeta.lifetime_budget) / 100
+   993→                  : campanaExistente.totalBudget,
+   994→            },
+   995→          })
+   996→          actualizadas++
+   997→        } else {
+   998→          // Crear nueva campaña
+   999→          await db.campaign.create({
+  1000→            data: {
+  1001→              metaCampaignId: campanaMeta.id,
+  1002→              name: campanaMeta.name,
+  1003→              objective: campanaMeta.objective,
+  1004→              status: campanaMeta.status,
+  1005→              totalBudget: campanaMeta.daily_budget
+  1006→                ? parseFloat(campanaMeta.daily_budget) / 100
+  1007→                : campanaMeta.lifetime_budget
+  1008→                  ? parseFloat(campanaMeta.lifetime_budget) / 100
+  1009→                  : 0,
+  1010→            },
+  1011→          })
+  1012→          creadas++
+  1013→        }
+  1014→      }
+  1015→
+  1016→      // Actualizar fecha de última sincronización
+  1017→      await this.actualizarUltimaSincronizacion()
+  1018→
+  1019→      console.log(`[MetaAPI] Sincronización completada: ${sincronizadas} campañas, ${creadas} creadas, ${actualizadas} actualizadas`)
+  1020→    } catch (error) {
+  1021→      console.error('[MetaAPI] Error en sincronización de campañas:', error)
+  1022→    }
+  1023→
+  1024→    return { synced: sincronizadas, created: creadas, updated: actualizadas }
+  1025→  }
+  1026→
+  1027→  /**
+  1028→   * Sincronizar insights/métricas desde Meta a la base de datos local.
+  1029→   * Obtiene insights a nivel de cuenta y los guarda en la tabla de métricas.
+  1030→   */
+  1031→  async syncInsightsToDb(dateRange: { from: string; to: string }): Promise<{ synced: number }> {
+  1032→    let sincronizadas = 0
+  1033→
+  1034→    try {
+  1035→      const insights = await this.getAccountInsights(dateRange)
+  1036→
+  1037→      for (const insight of insights) {
+  1038→        // Obtener o crear una región por defecto para las métricas sincronizadas
+  1039→        let region = await db.region.findFirst({ where: { code: 'GLOBAL' } })
+  1040→        if (!region) {
+  1041→          region = await db.region.create({
+  1042→            data: {
+  1043→              code: 'GLOBAL',
+  1044→              name: 'Global',
+  1045→              currency: 'USD',
+  1046→            },
+  1047→          })
+  1048→        }
+  1049→
+  1050→        // Verificar si ya existe una métrica para esta fecha y región
+  1051→        const fechaMetrica = new Date(insight.date_start)
+  1052→        const metricaExistente = await db.metric.findFirst({
+  1053→          where: {
+  1054→            regionId: region.id,
+  1055→            date: fechaMetrica,
+  1056→          },
+  1057→        })
+  1058→
+  1059→        const datosMetrica = {
+  1060→          totalSpend: parseFloat(insight.spend) || 0,
+  1061→          leadCount: this.contarAccion(insight.actions, 'lead') || 0,
+  1062→          matchScore: parseFloat(insight.ctr) || 0,
+  1063→          cpl: parseFloat(insight.cpc) || 0,
+  1064→          revenue: 0,
+  1065→          date: fechaMetrica,
+  1066→          regionId: region.id,
+  1067→        }
+  1068→
+  1069→        if (metricaExistente) {
+  1070→          await db.metric.update({
+  1071→            where: { id: metricaExistente.id },
+  1072→            data: datosMetrica,
+  1073→          })
+  1074→        } else {
+  1075→          await db.metric.create({
+  1076→            data: datosMetrica,
+  1077→          })
+  1078→        }
+  1079→        sincronizadas++
+  1080→      }
+  1081→
+  1082→      // Actualizar fecha de última sincronización
+  1083→      await this.actualizarUltimaSincronizacion()
+  1084→
+  1085→      console.log(`[MetaAPI] Sincronización de insights completada: ${sincronizadas} registros`)
+  1086→    } catch (error) {
+  1087→      console.error('[MetaAPI] Error en sincronización de insights:', error)
+  1088→    }
+  1089→
+  1090→    return { synced: sincronizadas }
+  1091→  }
+  1092→
+  1093→  // =============================================
+  1094→  // MÉTODOS PRIVADOS DE APOYO
+  1095→  // =============================================
+  1096→
+  1097→  /**
+  1098→   * Dormir el hilo por un número de milisegundos (para backoff exponencial).
+  1099→   */
+  1100→  private dormir(ms: number): Promise<void> {
+  1101→    return new Promise((resolver) => setTimeout(resolver, ms))
+  1102→  }
+  1103→
+  1104→  /**
+  1105→   * Determinar si un código de error de Meta es temporal y merece reintento.
+  1106→   * Errores temporales: rate limiting, timeouts, errores de servidor.
+  1107→   */
+  1108→  private esErrorTemporal(codigo: number, subcodigo: number): boolean {
+  1109→    // Rate limiting
+  1110→    if (codigo === 4 || codigo === 17 || codigo === 341) return true
+  1111→    // Temporalmente no disponible
+  1112→    if (codigo === 2) return true
+  1113→    // Token expirado pero renovable
+  1114→    if (codigo === 190 && subcodigo === 463) return false // Token expirado, no reintentar
+  1115→    // Timeout de la API
+  1116→    if (codigo === 1) return true
+  1117→    // Error de aplicación temporal
+  1118→    if (codigo === 10) return true
+  1119→    return false
+  1120→  }
+  1121→
+  1122→  /**
+  1123→   * Marcar el token como expirado en la base de datos.
+  1124→   */
+  1125→  private async marcarTokenExpirado(): Promise<void> {
+  1126→    try {
+  1127→      await db.metaCredential.updateMany({
+  1128→        where: { isConnected: true },
+  1129→        data: {
+  1130→          isConnected: false,
+  1131→          connectionStatus: 'EXPIRED',
+  1132→          errorMessage: 'Token de acceso expirado',
+  1133→        },
+  1134→      })
+  1135→    } catch (error) {
+  1136→      console.error('[MetaAPI] Error al marcar token como expirado:', error)
+  1137→    }
+  1138→  }
+  1139→
+  1140→  /**
+  1141→   * Actualizar la fecha de última sincronización en la base de datos.
+  1142→   */
+  1143→  private async actualizarUltimaSincronizacion(): Promise<void> {
+  1144→    try {
+  1145→      await db.metaCredential.updateMany({
+  1146→        where: { isConnected: true },
+  1147→        data: { lastSyncAt: new Date() },
+  1148→      })
+  1149→    } catch (error) {
+  1150→      console.error('[MetaAPI] Error al actualizar última sincronización:', error)
+  1151→    }
+  1152→  }
+  1153→
+  1154→  /**
+  1155→   * Contar acciones de un tipo específico desde los datos de insights.
+  1156→   */
+  1157→  private contarAccion(
+  1158→    acciones: Array<{ action_type: string; value: string }> | undefined,
+  1159→    tipoAccion: string
+  1160→  ): number {
+  1161→    if (!acciones) return 0
+  1162→    const accion = acciones.find((a) => a.action_type === tipoAccion)
+  1163→    return accion ? parseInt(accion.value, 10) : 0
+  1164→  }
+  1165→}
+  1166→
+  1167→// =============================================
+  1168→// SINGLETON - INSTANCIA GLOBAL
+  1169→// =============================================
+  1170→
+  1171→let instanciaCache: MetaAPIService | null | undefined = undefined
+  1172→
+  1173→/**
+  1174→ * Obtener la instancia singleton del servicio Meta API.
+  1175→ * Intenta cargar desde la base de datos primero, luego desde variables de entorno.
+  1176→ * Retorna null si no hay credenciales configuradas.
+  1177→ */
+  1178→export async function getMetaAPI(): Promise<MetaAPIService | null> {
+  1179→  // Usar caché en memoria si ya se resolvió
+  1180→  if (instanciaCache !== undefined) {
+  1181→    return instanciaCache
+  1182→  }
+  1183→
+  1184→  // Intentar cargar desde la base de datos primero
+  1185→  const desdeBD = await MetaAPIService.fromDatabase()
+  1186→  if (desdeBD) {
+  1187→    instanciaCache = desdeBD
+  1188→    return desdeBD
+  1189→  }
+  1190→
+  1191→  // Fallback a variables de entorno
+  1192→  const desdeEnv = MetaAPIService.fromEnv()
+  1193→  instanciaCache = desdeEnv
+  1194→  return desdeEnv
+  1195→}
+  1196→
+  1197→/**
+  1198→ * Invalidar la caché del singleton.
+  1199→ * Útil cuando se actualizan las credenciales en la base de datos.
+  1200→ */
+  1201→export function invalidateMetaAPICache(): void {
+  1202→  instanciaCache = undefined
+  1203→}
+  1204→
