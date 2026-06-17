@@ -117,3 +117,30 @@ Stage Summary:
 - API /api/meta/status responde correctamente (200 OK)
 - API /api/meta/auth valida tokens y rechaza credenciales inválidas
 - 0 errores en navegador, lint limpio
+
+---
+Task ID: 9
+Agent: Main Agent
+Task: Subir a GitHub, instalar Playwright, aplicar mejoras continuas
+
+Work Log:
+- Agregó .env.example con todas las variables de entorno documentadas
+- Actualizó .gitignore para excluir DB, screenshots, agent context
+- Creó 9 commits estructurados (conventional commits)
+- Instaló Playwright + Chromium browser
+- Creó 32 tests E2E: dashboard.spec.ts (20 tests) + api.spec.ts (12 tests)
+- Creó GitHub Actions CI workflow (.github/workflows/ci.yml)
+- Agregó middleware.ts con rate limiting por IP y ruta
+- Agregó ErrorBoundary component para manejo graceful de errores
+- Agregó /api/health endpoint con verificación de DB, Meta API y data
+- Agregó headers de seguridad (X-Frame-Options, X-XSS-Protection, etc.)
+- Creó README.md profesional con arquitectura, setup, API docs
+- Todos los 32 tests E2E pasan
+- Push exitoso a https://github.com/gozustrike-lab/facebook-ads
+
+Stage Summary:
+- Repositorio en GitHub con 11 commits limpios
+- 32/32 Playwright tests pasando
+- CI/CD configurado con GitHub Actions
+- Rate limiting, health check, error boundary implementados
+- Seguridad: headers, rate limiting, .env excluido
