@@ -1,11 +1,12 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { fetchPayments, fetchRegions } from '@/lib/api'
+import { fetchPayments } from '@/lib/api'
 import { KpiCard } from './KpiCard'
 import { StatusBadge } from './StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { CollapsibleSection } from './CollapsibleSection'
 import {
   ChartContainer,
   ChartTooltip,
@@ -19,9 +20,10 @@ import {
   DollarSign,
   CreditCard,
   TrendingUp,
-  Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { useMediaQuery } from '@/hooks/use-media-query'
+import { motion } from 'framer-motion'
 
 const GATEWAY_LABELS: Record<string, string> = {
   STRIPE: 'Stripe',
@@ -49,6 +51,8 @@ const barChartConfig: ChartConfig = {
 }
 
 export function PaymentsTab() {
+  const isMobile = useMediaQuery('(max-width: 768px)')
+
   const { data: payments, isLoading } = useQuery({
     queryKey: ['payments'],
     queryFn: fetchPayments,
@@ -92,43 +96,97 @@ export function PaymentsTab() {
     }))
   })()
 
-  return (
-    <div className="space-y-6">
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard
-          title="Ingresos Totales (USD)"
-          value={`$${stats.totalRevenue.toLocaleString('es', { minimumFractionDigits: 2 })}`}
-          icon={DollarSign}
-          loading={isLoading}
-          trend={{ value: 18.5, positive: true }}
-        />
-        <KpiCard
-          title="Pagos Completados"
-          value={stats.completed}
-          icon={CreditCard}
-          loading={isLoading}
-          trend={{ value: 12.0, positive: true }}
-        />
-        <KpiCard
-          title="Tasa de Conversión"
-          value={`${stats.conversionRate.toFixed(1)}%`}
-          icon={TrendingUp}
-          loading={isLoading}
-          trend={{ value: 5.3, positive: true }}
-        />
+  // Mobile Payment Card
+  const MobilePaymentCard = ({ payment }: { payment: typeof payments extends (infer T)[] ? T : never }) => (
+    <div className="p-3 rounded-lg border space-y-1.5">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm">
+          {payment.lead ? `${payment.lead.firstName || ''} ${payment.lead.lastName || ''}` : '—'}
+        </span>
+        <StatusBadge status={payment.status} />
       </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="text-emerald-600 font-semibold">${payment.amountUsd.toFixed(2)} USD</span>
+        <span>·</span>
+        <span>{payment.amount.toLocaleString('es', { minimumFractionDigits: 2 })} {payment.currency}</span>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <Badge variant="outline" className="text-[10px]">{GATEWAY_LABELS[payment.gateway] || payment.gateway}</Badge>
+        <span className="text-muted-foreground">{format(new Date(payment.createdAt), 'dd/MM/yy HH:mm')}</span>
+      </div>
+    </div>
+  )
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Pie Chart - Revenue by Gateway */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Ingresos por Gateway</CardTitle>
-          </CardHeader>
-          <CardContent>
+  return (
+    <div className="space-y-4">
+      {/* Stats Cards - Horizontal scroll on mobile, grid on desktop */}
+      {isMobile ? (
+        <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
+          <div className="snap-start shrink-0 w-[200px]">
+            <KpiCard
+              title="Ingresos"
+              value={`$${stats.totalRevenue.toLocaleString('es', { minimumFractionDigits: 2 })}`}
+              icon={DollarSign}
+              loading={isLoading}
+              trend={{ value: 18.5, positive: true }}
+            />
+          </div>
+          <div className="snap-start shrink-0 w-[200px]">
+            <KpiCard
+              title="Pagos OK"
+              value={stats.completed}
+              icon={CreditCard}
+              loading={isLoading}
+              trend={{ value: 12.0, positive: true }}
+            />
+          </div>
+          <div className="snap-start shrink-0 w-[200px]">
+            <KpiCard
+              title="Conversión"
+              value={`${stats.conversionRate.toFixed(1)}%`}
+              icon={TrendingUp}
+              loading={isLoading}
+              trend={{ value: 5.3, positive: true }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <KpiCard
+            title="Ingresos Totales (USD)"
+            value={`$${stats.totalRevenue.toLocaleString('es', { minimumFractionDigits: 2 })}`}
+            icon={DollarSign}
+            loading={isLoading}
+            trend={{ value: 18.5, positive: true }}
+          />
+          <KpiCard
+            title="Pagos Completados"
+            value={stats.completed}
+            icon={CreditCard}
+            loading={isLoading}
+            trend={{ value: 12.0, positive: true }}
+          />
+          <KpiCard
+            title="Tasa de Conversión"
+            value={`${stats.conversionRate.toFixed(1)}%`}
+            icon={TrendingUp}
+            loading={isLoading}
+            trend={{ value: 5.3, positive: true }}
+          />
+        </div>
+      )}
+
+      {/* Charts - Collapsible on mobile */}
+      {isMobile ? (
+        <>
+          <CollapsibleSection
+            value="chart-gateway"
+            title="Ingresos por Gateway"
+            icon={<CreditCard className="h-4 w-4 text-primary" />}
+            defaultOpen={false}
+          >
             {gatewayData.length > 0 ? (
-              <ChartContainer config={pieChartConfig} className="h-[280px] w-full">
+              <ChartContainer config={pieChartConfig} className="h-[260px] w-full">
                 <PieChart>
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Pie
@@ -137,8 +195,8 @@ export function PaymentsTab() {
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={90}
-                    innerRadius={50}
+                    outerRadius={80}
+                    innerRadius={45}
                     paddingAngle={2}
                   >
                     {gatewayData.map((_, index) => (
@@ -149,21 +207,20 @@ export function PaymentsTab() {
                 </PieChart>
               </ChartContainer>
             ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
                 Sin datos de pagos
               </div>
             )}
-          </CardContent>
-        </Card>
+          </CollapsibleSection>
 
-        {/* Bar Chart - Revenue by Currency */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Ingresos por Moneda (USD equivalente)</CardTitle>
-          </CardHeader>
-          <CardContent>
+          <CollapsibleSection
+            value="chart-currency"
+            title="Ingresos por Moneda (USD)"
+            icon={<DollarSign className="h-4 w-4 text-primary" />}
+            defaultOpen={false}
+          >
             {currencyData.length > 0 ? (
-              <ChartContainer config={barChartConfig} className="h-[280px] w-full">
+              <ChartContainer config={barChartConfig} className="h-[260px] w-full">
                 <BarChart data={currencyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                   <XAxis dataKey="currency" tick={{ fontSize: 12 }} className="text-muted-foreground" />
@@ -173,34 +230,105 @@ export function PaymentsTab() {
                 </BarChart>
               </ChartContainer>
             ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
+              <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
                 Sin datos de pagos
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payments Table */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-primary" />
-            Historial de Pagos
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse flex gap-4">
-                  <div className="h-4 bg-muted rounded w-1/5" />
-                  <div className="h-4 bg-muted rounded w-1/6" />
-                  <div className="h-4 bg-muted rounded w-1/6" />
+          </CollapsibleSection>
+        </>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Pie Chart - Revenue by Gateway */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Ingresos por Gateway</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {gatewayData.length > 0 ? (
+                <ChartContainer config={pieChartConfig} className="h-[280px] w-full">
+                  <PieChart>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Pie
+                      data={gatewayData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={90}
+                      innerRadius={50}
+                      paddingAngle={2}
+                    >
+                      {gatewayData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartLegend content={<ChartLegendContent />} />
+                  </PieChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
+                  Sin datos de pagos
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bar Chart - Revenue by Currency */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">Ingresos por Moneda (USD equivalente)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {currencyData.length > 0 ? (
+                <ChartContainer config={barChartConfig} className="h-[280px] w-full">
+                  <BarChart data={currencyData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                    <XAxis dataKey="currency" tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                    <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
+                  Sin datos de pagos
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Payments List */}
+      <CollapsibleSection
+        value="payment-history"
+        title="Historial de Pagos"
+        icon={<CreditCard className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse h-16 bg-muted rounded-lg" />
+            ))}
+          </div>
+        ) : payments && payments.length > 0 ? (
+          isMobile ? (
+            /* Mobile: Stacked Cards */
+            <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+              {payments.map((payment, idx) => (
+                <motion.div
+                  key={payment.id}
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.03 }}
+                >
+                  <MobilePaymentCard payment={payment} />
+                </motion.div>
               ))}
             </div>
-          ) : payments && payments.length > 0 ? (
+          ) : (
+            /* Desktop: Table */
             <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background z-10">
@@ -241,14 +369,14 @@ export function PaymentsTab() {
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="p-12 text-center">
-              <CreditCard className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-muted-foreground">Sin pagos registrados</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          )
+        ) : (
+          <div className="py-8 text-center">
+            <CreditCard className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-muted-foreground">Sin pagos registrados</p>
+          </div>
+        )}
+      </CollapsibleSection>
     </div>
   )
 }

@@ -6,15 +6,15 @@ import { useAppStore } from '@/lib/store'
 import { KpiCard } from './KpiCard'
 import { StatusBadge } from './StatusBadge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { cn } from '@/lib/utils'
 import {
   DollarSign,
   Users,
   Target,
   CheckCircle,
   BarChart3,
-  AlertTriangle,
   TrendingUp,
 } from 'lucide-react'
 import {
@@ -33,9 +33,9 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
 } from 'recharts'
 import { format } from 'date-fns'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 const lineChartConfig: ChartConfig = {
   gasto: { label: 'Gasto ($)', color: 'oklch(0.596 0.145 163.225)' },
@@ -48,6 +48,7 @@ const barChartConfig: ChartConfig = {
 
 export function OverviewTab() {
   const { selectedRegion } = useAppStore()
+  const isMobile = useIsMobile()
 
   const { data: metrics, isLoading: metricsLoading } = useQuery({
     queryKey: ['dashboard-metrics', selectedRegion],
@@ -132,10 +133,13 @@ export function OverviewTab() {
 
   const recentLeads = (leads || []).slice(0, 5)
 
+  // Accordion defaults: on mobile everything collapsed, on desktop everything open
+  const accordionDefaultValue = isMobile ? [] : ['charts', 'leads', 'alerts']
+
   return (
-    <div className="space-y-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div className="space-y-4">
+      {/* KPI Cards - 2 columns on mobile, 5 on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4">
         <KpiCard
           title="Gasto Total"
           value={`$${(metrics?.totalSpend || 0).toLocaleString('es', { minimumFractionDigits: 2 })}`}
@@ -174,149 +178,188 @@ export function OverviewTab() {
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Line Chart - Gasto y Leads */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              Gasto y Leads - Últimos 7 días
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {chartData.length > 0 ? (
-              <ChartContainer config={lineChartConfig} className="h-[280px] w-full">
-                <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis yAxisId="left" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="gasto"
-                    stroke="var(--color-gasto)"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="leads"
-                    stroke="var(--color-leads)"
-                    strokeWidth={2}
-                    dot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ChartContainer>
-            ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                Sin datos disponibles. Poblar datos de demostración para ver el gráfico.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Collapsible sections */}
+      <Accordion
+        type="multiple"
+        defaultValue={accordionDefaultValue}
+        className="space-y-2"
+      >
+        {/* Charts Section */}
+        <AccordionItem value="charts" className="border rounded-lg px-2 sm:px-4">
+          <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
+            <span className="flex items-center gap-2">
+              📊 Gasto y Leads
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 pb-2">
+              {/* Line Chart - Gasto y Leads */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    Gasto y Leads - Últimos 7 días
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {chartData.length > 0 ? (
+                    <ChartContainer config={lineChartConfig} className={cn('w-full', isMobile ? 'h-[200px]' : 'h-[280px]')}>
+                      <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                        <YAxis yAxisId="left" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <ChartLegend content={<ChartLegendContent />} />
+                        <Line
+                          yAxisId="left"
+                          type="monotone"
+                          dataKey="gasto"
+                          stroke="var(--color-gasto)"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                        />
+                        <Line
+                          yAxisId="right"
+                          type="monotone"
+                          dataKey="leads"
+                          stroke="var(--color-leads)"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ChartContainer>
+                  ) : (
+                    <div className={cn('flex items-center justify-center text-muted-foreground text-sm', isMobile ? 'h-[200px]' : 'h-[280px]')}>
+                      Sin datos disponibles. Poblar datos de demostración para ver el gráfico.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-        {/* Bar Chart - CPQL por Región */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Target className="h-4 w-4 text-primary" />
-              CPQL por Región
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {cpqlByRegion.length > 0 ? (
-              <ChartContainer config={barChartConfig} className="h-[280px] w-full">
-                <BarChart data={cpqlByRegion} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="region" tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <YAxis tick={{ fontSize: 12 }} className="text-muted-foreground" />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="cpql" fill="var(--color-cpql)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-              <div className="h-[280px] flex items-center justify-center text-muted-foreground text-sm">
-                Sin datos disponibles
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+              {/* Bar Chart - CPQL por Región */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Target className="h-4 w-4 text-primary" />
+                    CPQL por Región
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {cpqlByRegion.length > 0 ? (
+                    <ChartContainer config={barChartConfig} className={cn('w-full', isMobile ? 'h-[200px]' : 'h-[280px]')}>
+                      <BarChart data={cpqlByRegion} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                        <XAxis dataKey="region" tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                        <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Bar dataKey="cpql" fill="var(--color-cpql)" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ChartContainer>
+                  ) : (
+                    <div className={cn('flex items-center justify-center text-muted-foreground text-sm', isMobile ? 'h-[200px]' : 'h-[280px]')}>
+                      Sin datos disponibles
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      {/* Bottom Row: Recent Leads + Alerts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Recent Leads Table */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Users className="h-4 w-4 text-primary" />
-              Leads Recientes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Recent Leads Section */}
+        <AccordionItem value="leads" className="border rounded-lg px-2 sm:px-4">
+          <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
+            <span className="flex items-center gap-2">
+              👥 Leads Recientes
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
             {recentLeads.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nombre</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">País</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Ruta</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Score</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Estado</th>
-                      <th className="text-left py-2 px-2 font-medium text-muted-foreground">Fecha</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentLeads.map((lead) => (
-                      <tr key={lead.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2 font-medium">
+              <>
+                {/* Mobile: compact card list */}
+                <div className="space-y-2 md:hidden pb-2">
+                  {recentLeads.map((lead) => (
+                    <div key={lead.id} className="flex items-center justify-between p-2.5 rounded-lg border bg-card">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">
                           {lead.firstName} {lead.lastName}
-                        </td>
-                        <td className="py-2 px-2 text-muted-foreground">{lead.country}</td>
-                        <td className="py-2 px-2 text-xs">
-                          <span className={lead.route === 'IN_COUNTRY_US' ? 'text-teal-600 dark:text-teal-400' : 'text-amber-600 dark:text-amber-400'}>
-                            {lead.route === 'IN_COUNTRY_US' ? '🇺🇸 In-Country' : '🌍 Out-Country'}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className={lead.qualificationScore >= 70 ? 'text-emerald-600 font-semibold' : lead.qualificationScore >= 40 ? 'text-amber-600' : 'text-red-600'}>
-                            {lead.qualificationScore}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2"><StatusBadge status={lead.status} /></td>
-                        <td className="py-2 px-2 text-xs text-muted-foreground">
-                          {format(new Date(lead.createdAt), 'dd/MM HH:mm')}
-                        </td>
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {lead.country} · Score: <span className={
+                            lead.qualificationScore >= 70 ? 'text-emerald-600 font-semibold' :
+                            lead.qualificationScore >= 40 ? 'text-amber-600' : 'text-red-600'
+                          }>{lead.qualificationScore}</span>
+                        </p>
+                      </div>
+                      <StatusBadge status={lead.status} />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop: table */}
+                <div className="hidden md:block overflow-x-auto pb-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nombre</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">País</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Ruta</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Score</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Estado</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Fecha</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {recentLeads.map((lead) => (
+                        <tr key={lead.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                          <td className="py-2 px-2 font-medium">
+                            {lead.firstName} {lead.lastName}
+                          </td>
+                          <td className="py-2 px-2 text-muted-foreground">{lead.country}</td>
+                          <td className="py-2 px-2 text-xs">
+                            <span className={lead.route === 'IN_COUNTRY_US' ? 'text-teal-600 dark:text-teal-400' : 'text-amber-600 dark:text-amber-400'}>
+                              {lead.route === 'IN_COUNTRY_US' ? '🇺🇸 In-Country' : '🌍 Out-Country'}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2">
+                            <span className={lead.qualificationScore >= 70 ? 'text-emerald-600 font-semibold' : lead.qualificationScore >= 40 ? 'text-amber-600' : 'text-red-600'}>
+                              {lead.qualificationScore}
+                            </span>
+                          </td>
+                          <td className="py-2 px-2"><StatusBadge status={lead.status} /></td>
+                          <td className="py-2 px-2 text-xs text-muted-foreground">
+                            {format(new Date(lead.createdAt), 'dd/MM HH:mm')}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             ) : (
-              <div className="py-8 text-center text-muted-foreground text-sm">
+              <div className="py-8 text-center text-muted-foreground text-sm pb-2">
                 Sin leads recientes
               </div>
             )}
-          </CardContent>
-        </Card>
+          </AccordionContent>
+        </AccordionItem>
 
-        {/* Active Alerts Panel */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Alertas Activas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Alerts Section */}
+        <AccordionItem value="alerts" className="border rounded-lg px-2 sm:px-4">
+          <AccordionTrigger className="text-sm font-semibold py-3 hover:no-underline">
+            <span className="flex items-center gap-2">
+              🔔 Alertas Activas
+              {alerts.length > 0 && (
+                <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold">
+                  {alerts.length}
+                </span>
+              )}
+            </span>
+          </AccordionTrigger>
+          <AccordionContent>
             {alerts.length > 0 ? (
-              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar">
+              <div className="space-y-2 max-h-64 overflow-y-auto custom-scrollbar pb-2">
                 {alerts.slice(0, 10).map((alert, idx) => (
                   <Alert key={idx} variant={alert.type === 'danger' ? 'destructive' : 'default'} className="py-2 px-3">
                     <AlertDescription className="text-xs">{alert.message}</AlertDescription>
@@ -324,14 +367,14 @@ export function OverviewTab() {
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-muted-foreground text-sm">
+              <div className="py-8 text-center text-muted-foreground text-sm pb-2">
                 <CheckCircle className="h-8 w-8 mx-auto mb-2 text-emerald-500" />
                 Sin alertas activas
               </div>
             )}
-          </CardContent>
-        </Card>
-      </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </div>
   )
 }

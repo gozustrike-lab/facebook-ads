@@ -8,16 +8,15 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
 import { MetaConnection } from './MetaConnection'
+import { CollapsibleSection } from './CollapsibleSection'
 import { toast } from 'sonner'
 import {
   Settings,
   Globe,
   Activity,
-  Server,
   Database,
   Wifi,
   Shield,
@@ -32,6 +31,7 @@ import {
 import { motion } from 'framer-motion'
 import { useState } from 'react'
 import { format } from 'date-fns'
+import { useMediaQuery } from '@/hooks/use-media-query'
 
 interface RegionFormData {
   code: string
@@ -55,6 +55,7 @@ const defaultFormData: RegionFormData = {
 
 export function SettingsTab() {
   const queryClient = useQueryClient()
+  const isMobile = useMediaQuery('(max-width: 768px)')
   const [isRegionDialogOpen, setIsRegionDialogOpen] = useState(false)
   const [editingRegion, setEditingRegion] = useState<string | null>(null)
   const [formData, setFormData] = useState<RegionFormData>(defaultFormData)
@@ -137,65 +138,70 @@ export function SettingsTab() {
   ]
 
   return (
-    <div className="space-y-6">
-      {/* Conexión Meta/Facebook - Primera tarjeta, la más importante */}
-      <MetaConnection />
+    <div className="space-y-4">
+      {/* Conexión Meta/Facebook - Collapsible on mobile */}
+      <CollapsibleSection
+        value="meta-connection"
+        title="Conexión Meta / Facebook"
+        icon={<Settings className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        <MetaConnection />
+      </CollapsibleSection>
 
-      {/* System Health */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="h-4 w-4 text-primary" />
-            Estado del Sistema
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {healthItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <motion.div
-                  key={item.label}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border"
-                >
-                  <div className={`p-2 rounded-lg ${
-                    item.status === 'healthy' ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'bg-amber-50 dark:bg-amber-950/20'
-                  }`}>
-                    <Icon className={`h-4 w-4 ${
-                      item.status === 'healthy' ? 'text-emerald-600' : 'text-amber-600'
-                    }`} />
+      {/* System Health - Collapsible on mobile */}
+      <CollapsibleSection
+        value="system-health"
+        title="Estado del Sistema"
+        icon={<Activity className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {healthItems.map((item) => {
+            const Icon = item.icon
+            return (
+              <motion.div
+                key={item.label}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-3 p-3 rounded-lg border border-border"
+              >
+                <div className={`p-2 rounded-lg shrink-0 ${
+                  item.status === 'healthy' ? 'bg-emerald-50 dark:bg-emerald-950/20' : 'bg-amber-50 dark:bg-amber-950/20'
+                }`}>
+                  <Icon className={`h-4 w-4 ${
+                    item.status === 'healthy' ? 'text-emerald-600' : 'text-amber-600'
+                  }`} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium truncate">{item.label}</span>
+                    {item.status === 'healthy' ? (
+                      <CheckCircle className="h-3 w-3 text-emerald-500 shrink-0" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-amber-500 shrink-0" />
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-sm font-medium">{item.label}</span>
-                      {item.status === 'healthy' ? (
-                        <CheckCircle className="h-3 w-3 text-emerald-500" />
-                      ) : (
-                        <XCircle className="h-3 w-3 text-amber-500" />
-                      )}
-                    </div>
-                    <p className="text-xs text-muted-foreground">{item.detail}</p>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
+                  <p className="text-xs text-muted-foreground truncate">{item.detail}</p>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      </CollapsibleSection>
 
-      {/* Region Management */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Globe className="h-4 w-4 text-primary" />
-              Gestión de Regiones
-            </CardTitle>
+      {/* Region Management - Collapsible on mobile */}
+      <CollapsibleSection
+        value="region-management"
+        title="Gestión de Regiones"
+        icon={<Globe className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        <div className="space-y-3">
+          <div className="flex justify-end">
             <Dialog open={isRegionDialogOpen} onOpenChange={setIsRegionDialogOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" onClick={handleOpenCreate} className="gap-1.5">
+                <Button size="sm" onClick={handleOpenCreate} className="gap-1.5 w-full sm:w-auto">
                   <Plus className="h-3.5 w-3.5" />
                   Nueva Región
                 </Button>
@@ -288,8 +294,7 @@ export function SettingsTab() {
               </DialogContent>
             </Dialog>
           </div>
-        </CardHeader>
-        <CardContent>
+
           {regionsLoading ? (
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
@@ -297,109 +302,192 @@ export function SettingsTab() {
               ))}
             </div>
           ) : regions && regions.length > 0 ? (
-            <div className="space-y-2">
-              {regions.map((region) => (
-                <motion.div
-                  key={region.id}
-                  initial={{ opacity: 0, y: 5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Globe className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
+            isMobile ? (
+              /* Mobile: Compact region cards */
+              <div className="space-y-2">
+                {regions.map((region) => (
+                  <motion.div
+                    key={region.id}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded-lg border border-border space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-primary/10">
+                          <Globe className="h-3.5 w-3.5 text-primary" />
+                        </div>
                         <span className="font-semibold text-sm">{region.code}</span>
-                        <span className="text-sm text-muted-foreground">— {region.name}</span>
+                        <span className="text-xs text-muted-foreground">— {region.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
                         <Badge variant="outline" className="text-[10px]">{region.currency}</Badge>
                         {!region.isActive && (
                           <Badge variant="outline" className="text-[10px] text-red-500 border-red-300">Inactiva</Badge>
                         )}
                       </div>
-                      <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
-                        <span>CPL: <span className="text-emerald-600 font-medium">${region.cplTarget}</span></span>
-                        <span>Kill: <span className="text-red-600 font-medium">${region.cplKillSwitch}</span></span>
-                        <span>Idioma: {region.language.toUpperCase()}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">CPL:</span>{' '}
+                        <span className="text-emerald-600 font-medium">${region.cplTarget}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Kill:</span>{' '}
+                        <span className="text-red-600 font-medium">${region.cplKillSwitch}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Idioma:</span>{' '}
+                        <span>{region.language.toUpperCase()}</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleOpenEdit(region as (RegionFormData & { id: string }))}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                      onClick={() => deleteRegionMutation.mutate(region.id)}
-                      disabled={deleteRegionMutation.isPending}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-7 text-xs gap-1"
+                        onClick={() => handleOpenEdit(region as (RegionFormData & { id: string }))}
+                      >
+                        <Pencil className="h-3 w-3" /> Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 h-7 text-xs gap-1 text-red-600"
+                        onClick={() => deleteRegionMutation.mutate(region.id)}
+                        disabled={deleteRegionMutation.isPending}
+                      >
+                        <Trash2 className="h-3 w-3" /> Eliminar
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              /* Desktop: Horizontal rows */
+              <div className="space-y-2">
+                {regions.map((region) => (
+                  <motion.div
+                    key={region.id}
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <Globe className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sm">{region.code}</span>
+                          <span className="text-sm text-muted-foreground">— {region.name}</span>
+                          <Badge variant="outline" className="text-[10px]">{region.currency}</Badge>
+                          {!region.isActive && (
+                            <Badge variant="outline" className="text-[10px] text-red-500 border-red-300">Inactiva</Badge>
+                          )}
+                        </div>
+                        <div className="flex gap-4 mt-1 text-xs text-muted-foreground">
+                          <span>CPL: <span className="text-emerald-600 font-medium">${region.cplTarget}</span></span>
+                          <span>Kill: <span className="text-red-600 font-medium">${region.cplKillSwitch}</span></span>
+                          <span>Idioma: {region.language.toUpperCase()}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleOpenEdit(region as (RegionFormData & { id: string }))}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                        onClick={() => deleteRegionMutation.mutate(region.id)}
+                        disabled={deleteRegionMutation.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )
           ) : (
             <div className="py-8 text-center text-muted-foreground text-sm">
               Sin regiones configuradas
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </CollapsibleSection>
 
-      {/* Automation Rules */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Reglas de Automatización
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {[
-              { name: 'Kill Switch Automático', desc: 'Desactivar adsets cuando CPL supere el umbral 1.5x', enabled: true },
-              { name: 'Escalado Vertical', desc: 'Incrementar presupuesto +15% para adsets con CPL < 80% del objetivo', enabled: true },
-              { name: 'Pausa por Bajo Rendimiento', desc: 'Pausar adsets con CPL > 130% del objetivo', enabled: true },
-              { name: 'Notificaciones Email', desc: 'Enviar alertas por email cuando se active un kill switch', enabled: false },
-              { name: 'Escalado Horizontal', desc: 'Duplicar configuración de adsets exitosos a nuevas audiencias', enabled: false },
-            ].map((rule) => (
-              <div key={rule.name} className="flex items-center justify-between p-3 rounded-lg border border-border">
-                <div>
-                  <p className="text-sm font-medium">{rule.name}</p>
-                  <p className="text-xs text-muted-foreground">{rule.desc}</p>
-                </div>
-                <Switch defaultChecked={rule.enabled} />
+      {/* Automation Rules - Collapsible on mobile */}
+      <CollapsibleSection
+        value="automation-rules"
+        title="Reglas de Automatización"
+        icon={<Zap className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        <div className="space-y-3">
+          {[
+            { name: 'Kill Switch Automático', desc: 'Desactivar adsets cuando CPL supere el umbral 1.5x', enabled: true },
+            { name: 'Escalado Vertical', desc: 'Incrementar presupuesto +15% para adsets con CPL < 80% del objetivo', enabled: true },
+            { name: 'Pausa por Bajo Rendimiento', desc: 'Pausar adsets con CPL > 130% del objetivo', enabled: true },
+            { name: 'Notificaciones Email', desc: 'Enviar alertas por email cuando se active un kill switch', enabled: false },
+            { name: 'Escalado Horizontal', desc: 'Duplicar configuración de adsets exitosos a nuevas audiencias', enabled: false },
+          ].map((rule) => (
+            <div key={rule.name} className="flex items-center justify-between p-3 rounded-lg border border-border gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{rule.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{rule.desc}</p>
               </div>
+              <Switch defaultChecked={rule.enabled} />
+            </div>
+          ))}
+        </div>
+      </CollapsibleSection>
+
+      {/* CAPI Event Log - Collapsible on mobile */}
+      <CollapsibleSection
+        value="capi-log"
+        title="Registro de Eventos CAPI"
+        icon={<Shield className="h-4 w-4 text-primary" />}
+        defaultOpen={!isMobile}
+      >
+        {capiLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse h-10 bg-muted rounded" />
             ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* CAPI Event Log */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" />
-            Registro de Eventos CAPI
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {capiLoading ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="animate-pulse h-10 bg-muted rounded" />
+        ) : capiEvents && capiEvents.length > 0 ? (
+          isMobile ? (
+            /* Mobile: Simplified cards */
+            <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar">
+              {capiEvents.map((event) => (
+                <div key={event.id} className="flex items-center justify-between p-2.5 rounded-lg border border-border/50">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Badge variant="outline" className="text-[10px] shrink-0">{event.eventName}</Badge>
+                    <span className="text-xs text-muted-foreground truncate">{event.country || '—'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {event.sentToMeta ? (
+                      <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+                    ) : (
+                      <XCircle className="h-3.5 w-3.5 text-amber-500" />
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {format(new Date(event.eventTime), 'HH:mm:ss')}
+                    </span>
+                  </div>
+                </div>
               ))}
             </div>
-          ) : capiEvents && capiEvents.length > 0 ? (
+          ) : (
+            /* Desktop: Table */
             <div className="overflow-x-auto max-h-[300px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-background">
@@ -432,13 +520,13 @@ export function SettingsTab() {
                 </tbody>
               </table>
             </div>
-          ) : (
-            <div className="py-8 text-center text-muted-foreground text-sm">
-              Sin eventos CAPI registrados
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          )
+        ) : (
+          <div className="py-8 text-center text-muted-foreground text-sm">
+            Sin eventos CAPI registrados
+          </div>
+        )}
+      </CollapsibleSection>
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
+import { CollapsibleSection } from './CollapsibleSection'
 import { toast } from 'sonner'
 import {
   Megaphone,
@@ -15,17 +16,19 @@ import {
   Copy,
   OctagonX,
   Zap,
-  DollarSign,
-  Target,
-  Users,
   Loader2,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
+import { useMediaQuery } from '@/hooks/use-media-query'
+import type { AdSet } from '@/lib/api'
 
 export function CampaignsTab() {
   const queryClient = useQueryClient()
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null)
+  const isMobile = useMediaQuery('(max-width: 768px)')
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['campaigns'],
@@ -119,8 +122,154 @@ export function CampaignsTab() {
   const activeCampaigns = campaigns?.filter((c) => c.status === 'ACTIVE') || []
   const pausedCampaigns = campaigns?.filter((c) => c.status !== 'ACTIVE') || []
 
+  // Mobile AdSet Card component
+  const MobileAdSetCard = ({ adSet }: { adSet: AdSet }) => (
+    <div className="p-3 rounded-lg border space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm">{adSet.name.split(' - ').pop()}</span>
+        <div className="flex items-center gap-1">
+          <StatusBadge status={adSet.status} />
+          {adSet.killSwitchTriggered && (
+            <span className="text-red-500 text-xs">🛑</span>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div>
+          <span className="text-muted-foreground">Región:</span>{' '}
+          <span className="font-medium">{adSet.region?.code || '—'}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Presupuesto:</span>{' '}
+          <span className="font-medium">${adSet.budget.toFixed(2)}</span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">CPL:</span>{' '}
+          <span className={adSet.cpl > (adSet.region?.cplTarget || 999) ? 'text-red-600 font-semibold' : 'text-emerald-600 font-semibold'}>
+            ${adSet.cpl.toFixed(2)}
+          </span>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Leads:</span>{' '}
+          <span className="font-medium">{adSet.leadCount}</span>
+        </div>
+      </div>
+      {adSet.scaleDirection && (
+        <Badge variant="outline" className="text-[9px] px-1 py-0">
+          {adSet.scaleDirection === 'V' ? '↕ Vertical' : '↔ Horizontal'}
+        </Badge>
+      )}
+      {adSet.status === 'ACTIVE' && (
+        <div className="flex gap-1 pt-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-7 text-xs gap-1"
+            onClick={() => handleScaleVertical(adSet.id, adSet.budget)}
+            disabled={updateAdSetMutation.isPending}
+          >
+            ↕ +15%
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-7 text-xs gap-1"
+            onClick={() => handleScaleHorizontal(adSet.id)}
+            disabled={updateAdSetMutation.isPending}
+          >
+            ↔ Dup
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex-1 h-7 text-xs text-red-600 gap-1"
+            onClick={() => handleKillSwitch(adSet.id)}
+            disabled={updateAdSetMutation.isPending}
+          >
+            🛑 Kill
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+
+  // Desktop AdSet Table Row
+  const DesktopAdSetRow = ({ adSet }: { adSet: AdSet }) => (
+    <tr className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+      <td className="py-2.5 px-3">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-xs">{adSet.name.split(' - ').pop()}</span>
+          {adSet.scaleDirection && (
+            <Badge variant="outline" className="text-[9px] px-1 py-0">
+              {adSet.scaleDirection === 'V' ? '↕ Vertical' : '↔ Horizontal'}
+            </Badge>
+          )}
+        </div>
+      </td>
+      <td className="py-2.5 px-3 text-xs text-muted-foreground">
+        {adSet.region?.code || '—'}
+      </td>
+      <td className="py-2.5 px-3 text-xs">
+        <span className="font-medium">${adSet.budget.toFixed(2)}</span>
+        <span className="text-muted-foreground ml-1">{adSet.budgetCurrency}</span>
+      </td>
+      <td className="py-2.5 px-3">
+        <span className={adSet.cpl > (adSet.region?.cplTarget || 999) ? 'text-red-600 font-semibold' : 'text-emerald-600'}>
+          ${adSet.cpl.toFixed(2)}
+        </span>
+      </td>
+      <td className="py-2.5 px-3 text-xs">{adSet.leadCount}</td>
+      <td className="py-2.5 px-3">
+        <div className="flex items-center gap-1">
+          <StatusBadge status={adSet.status} />
+          {adSet.killSwitchTriggered && (
+            <span className="text-red-500 text-xs">🛑</span>
+          )}
+        </div>
+      </td>
+      <td className="py-2.5 px-3">
+        <div className="flex items-center justify-end gap-1">
+          {adSet.status === 'ACTIVE' && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+                onClick={() => handleScaleVertical(adSet.id, adSet.budget)}
+                disabled={updateAdSetMutation.isPending}
+                title="Escalar Vertical +15%"
+              >
+                <TrendingUp className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                onClick={() => handleScaleHorizontal(adSet.id)}
+                disabled={updateAdSetMutation.isPending}
+                title="Escalar Horizontal (Duplicar)"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                onClick={() => handleKillSwitch(adSet.id)}
+                disabled={updateAdSetMutation.isPending}
+                title="Kill Switch"
+              >
+                <OctagonX className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header with automation button */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -130,7 +279,7 @@ export function CampaignsTab() {
         <Button
           onClick={() => automationMutation.mutate()}
           disabled={automationMutation.isPending}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2 w-full sm:w-auto"
         >
           {automationMutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -165,13 +314,13 @@ export function CampaignsTab() {
                     onClick={() => setExpandedCampaign(isExpanded ? null : campaign.id)}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg bg-primary/10 shrink-0">
                           <Megaphone className="h-4 w-4 text-primary" />
                         </div>
-                        <div>
-                          <CardTitle className="text-sm font-semibold">{campaign.name}</CardTitle>
-                          <div className="flex items-center gap-2 mt-1">
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm font-semibold truncate">{campaign.name}</CardTitle>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <StatusBadge status={campaign.status} />
                             {campaign.autoScale && (
                               <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400">
@@ -184,7 +333,7 @@ export function CampaignsTab() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0 ml-3">
                         <p className="text-sm font-bold">${campaign.totalSpend.toFixed(2)}</p>
                         <p className="text-xs text-muted-foreground">de ${campaign.totalBudget.toFixed(2)}</p>
                       </div>
@@ -196,6 +345,16 @@ export function CampaignsTab() {
                         <span className="text-xs text-muted-foreground">{totalLeads} leads</span>
                       </div>
                     </div>
+                    {/* Expand indicator on mobile */}
+                    {isMobile && (
+                      <div className="flex justify-center mt-2">
+                        {isExpanded ? (
+                          <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </div>
+                    )}
                   </CardHeader>
 
                   <AnimatePresence>
@@ -208,96 +367,36 @@ export function CampaignsTab() {
                       >
                         <Separator />
                         <CardContent className="p-0">
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="bg-muted/50">
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">AdSet</th>
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Región</th>
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Presupuesto</th>
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">CPL</th>
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Leads</th>
-                                  <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Estado</th>
-                                  <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs">Acciones</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {adSets.map((adSet) => (
-                                  <tr key={adSet.id} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
-                                    <td className="py-2.5 px-3">
-                                      <div className="flex items-center gap-2">
-                                        <span className="font-medium text-xs">{adSet.name.split(' - ').pop()}</span>
-                                        {adSet.scaleDirection && (
-                                          <Badge variant="outline" className="text-[9px] px-1 py-0">
-                                            {adSet.scaleDirection === 'V' ? '↕ Vertical' : '↔ Horizontal'}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="py-2.5 px-3 text-xs text-muted-foreground">
-                                      {adSet.region?.code || '—'}
-                                    </td>
-                                    <td className="py-2.5 px-3 text-xs">
-                                      <span className="font-medium">${adSet.budget.toFixed(2)}</span>
-                                      <span className="text-muted-foreground ml-1">{adSet.budgetCurrency}</span>
-                                    </td>
-                                    <td className="py-2.5 px-3">
-                                      <span className={adSet.cpl > (adSet.region?.cplTarget || 999) ? 'text-red-600 font-semibold' : 'text-emerald-600'}>
-                                        ${adSet.cpl.toFixed(2)}
-                                      </span>
-                                    </td>
-                                    <td className="py-2.5 px-3 text-xs">{adSet.leadCount}</td>
-                                    <td className="py-2.5 px-3">
-                                      <div className="flex items-center gap-1">
-                                        <StatusBadge status={adSet.status} />
-                                        {adSet.killSwitchTriggered && (
-                                          <span className="text-red-500 text-xs">🛑</span>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="py-2.5 px-3">
-                                      <div className="flex items-center justify-end gap-1">
-                                        {adSet.status === 'ACTIVE' && (
-                                          <>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
-                                              onClick={() => handleScaleVertical(adSet.id, adSet.budget)}
-                                              disabled={updateAdSetMutation.isPending}
-                                              title="Escalar Vertical +15%"
-                                            >
-                                              <TrendingUp className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-7 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
-                                              onClick={() => handleScaleHorizontal(adSet.id)}
-                                              disabled={updateAdSetMutation.isPending}
-                                              title="Escalar Horizontal (Duplicar)"
-                                            >
-                                              <Copy className="h-3.5 w-3.5" />
-                                            </Button>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
-                                              onClick={() => handleKillSwitch(adSet.id)}
-                                              disabled={updateAdSetMutation.isPending}
-                                              title="Kill Switch"
-                                            >
-                                              <OctagonX className="h-3.5 w-3.5" />
-                                            </Button>
-                                          </>
-                                        )}
-                                      </div>
-                                    </td>
+                          {/* Mobile: Stacked Cards */}
+                          {isMobile ? (
+                            <div className="p-3 space-y-2">
+                              {adSets.map((adSet) => (
+                                <MobileAdSetCard key={adSet.id} adSet={adSet} />
+                              ))}
+                            </div>
+                          ) : (
+                            /* Desktop: Table */
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-muted/50">
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">AdSet</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Región</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Presupuesto</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">CPL</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Leads</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Estado</th>
+                                    <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs">Acciones</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody>
+                                  {adSets.map((adSet) => (
+                                    <DesktopAdSetRow key={adSet.id} adSet={adSet} />
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </CardContent>
                       </motion.div>
                     )}
@@ -311,22 +410,20 @@ export function CampaignsTab() {
 
       {/* Paused campaigns summary */}
       {pausedCampaigns.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-muted-foreground">
-              Campañas Pausadas/Finalizadas ({pausedCampaigns.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {pausedCampaigns.map((c) => (
-                <Badge key={c.id} variant="outline" className="text-xs">
-                  {c.name} — <StatusBadge status={c.status} />
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <CollapsibleSection
+          value="paused-campaigns"
+          title={`Campañas Pausadas/Finalizadas (${pausedCampaigns.length})`}
+          icon={<Megaphone className="h-4 w-4 text-muted-foreground" />}
+          defaultOpen={false}
+        >
+          <div className="flex flex-wrap gap-2">
+            {pausedCampaigns.map((c) => (
+              <Badge key={c.id} variant="outline" className="text-xs">
+                {c.name} — <StatusBadge status={c.status} />
+              </Badge>
+            ))}
+          </div>
+        </CollapsibleSection>
       )}
     </div>
   )
