@@ -11,6 +11,15 @@ datasource db {
 }
 
 // =============================================
+// NOTA PARA VERCEL:
+// SQLite funciona para desarrollo local.
+// Para producción en Vercel, cambiar a PostgreSQL:
+//   provider = "postgresql"
+//   url      = env("DATABASE_URL")  // postgresql://user:pass@host:5432/db
+// Y usar Vercel Postgres o cualquier DB externa.
+// =============================================
+
+// =============================================
 // REGIÓN / CONFIGURACIÓN POR PAÍS
 // =============================================
 model Region {

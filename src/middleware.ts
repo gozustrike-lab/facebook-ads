@@ -1,17 +1,21 @@
 // Middleware de Rate Limiting y Seguridad - ImmiScale Meta Engine v5
+// Compatible con Vercel Serverless Functions
 import { NextRequest, NextResponse } from 'next/server'
 
-// Almacén en memoria para rate limiting
+// Almacén en memoria para rate limiting (se reinicia en cada cold start en serverless)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
+
+// Última limpieza
+let lastCleanup = Date.now()
 
 // Configuración por ruta
 const RATE_LIMITS: Record<string, { windowMs: number; maxRequests: number }> = {
-  '/api/chatbot': { windowMs: 60_000, maxRequests: 20 },       // 20 req/min
-  '/api/automation': { windowMs: 60_000, maxRequests: 10 },     // 10 req/min
-  '/api/meta/auth': { windowMs: 60_000, maxRequests: 5 },       // 5 req/min
-  '/api/seed': { windowMs: 300_000, maxRequests: 3 },           // 3 req/5min
-  '/api/capi': { windowMs: 60_000, maxRequests: 30 },           // 30 req/min
-  'default': { windowMs: 60_000, maxRequests: 60 },             // 60 req/min global
+  '/api/chatbot': { windowMs: 60_000, maxRequests: 20 },
+  '/api/automation': { windowMs: 60_000, maxRequests: 10 },
+  '/api/meta/auth': { windowMs: 60_000, maxRequests: 5 },
+  '/api/seed': { windowMs: 300_000, maxRequests: 3 },
+  '/api/capi': { windowMs: 60_000, maxRequests: 30 },
+  'default': { windowMs: 60_000, maxRequests: 60 },
 }
 
 function getRateLimitConfig(pathname: string) {
@@ -22,9 +26,17 @@ function getRateLimitConfig(pathname: string) {
 }
 
 function checkRateLimit(ip: string, pathname: string): { allowed: boolean; remaining: number; resetTime: number } {
+  // Limpiar entradas expiradas cada 5 minutos (lazy cleanup en serverless)
+  const now = Date.now()
+  if (now - lastCleanup > 300_000) {
+    for (const [key, record] of rateLimitStore.entries()) {
+      if (now > record.resetTime) rateLimitStore.delete(key)
+    }
+    lastCleanup = now
+  }
+
   const config = getRateLimitConfig(pathname)
   const key = `${ip}:${pathname}`
-  const now = Date.now()
 
   const record = rateLimitStore.get(key)
   if (!record || now > record.resetTime) {
@@ -41,19 +53,16 @@ function checkRateLimit(ip: string, pathname: string): { allowed: boolean; remai
   return { allowed: true, remaining: config.maxRequests - record.count, resetTime: record.resetTime }
 }
 
-// Limpiar entradas expiradas cada 5 minutos
-setInterval(() => {
-  const now = Date.now()
-  for (const [key, record] of rateLimitStore.entries()) {
-    if (now > record.resetTime) rateLimitStore.delete(key)
-  }
-}, 300_000)
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Solo aplicar a rutas API
   if (!pathname.startsWith('/api/')) {
+    return NextResponse.next()
+  }
+
+  // Skip rutas internas de Vercel/Next.js
+  if (pathname.startsWith('/api/_next') || pathname.startsWith('/api/__')) {
     return NextResponse.next()
   }
 
