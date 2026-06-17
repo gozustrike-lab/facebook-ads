@@ -1,0 +1,7 @@
+// ImmiScale Meta Engine v5 — Android App
+// Top-level build configuration
+
+plugins {
+    id("com.android.application") version "8.2.2" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.22" apply false
+}
