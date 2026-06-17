@@ -1,8 +1,9 @@
 // API de Automatización - ImmiScale Meta Engine v5
-// Reglas de escalado vertical, horizontal y kill-switch
+// Reglas de escalado vertical, horizontal y kill-switch con sincronización Meta
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getMetaAPI } from '@/lib/meta-api'
 
 // =============================================
 // GET - Obtener resumen del estado de automatización
@@ -156,6 +157,7 @@ export async function POST(request: NextRequest) {
 
 // =============================================
 // Escalado Vertical: Incrementar presupuesto en adsets exitosos
+// También actualiza el presupuesto en Meta si el adset tiene metaAdSetId
 // =============================================
 async function ejecutarScaleVertical(): Promise<ResultadoAccion> {
   const detalles: string[] = []
@@ -180,12 +182,16 @@ async function ejecutarScaleVertical(): Promise<ResultadoAccion> {
     // Filtrar solo los que tienen autoScale en la campaña
     const adsetsElegibles = adsetsCandidatos.filter(a => a.campaign.autoScale)
 
+    // Obtener instancia de Meta API si está disponible
+    const metaAPI = await getMetaAPI()
+
     for (const adset of adsetsElegibles) {
       // Incrementar presupuesto en 15%
       const presupuestoAnterior = adset.budget
       const nuevoPresupuesto = Math.round(presupuestoAnterior * 1.15 * 100) / 100
       const incremento = Math.round((nuevoPresupuesto - presupuestoAnterior) * 100) / 100
 
+      // Actualizar presupuesto en la base de datos local
       await db.adSet.update({
         where: { id: adset.id },
         data: {
@@ -195,10 +201,29 @@ async function ejecutarScaleVertical(): Promise<ResultadoAccion> {
         },
       })
 
+      // Intentar actualizar presupuesto en Meta si el adset tiene metaAdSetId
+      if (adset.metaAdSetId && metaAPI) {
+        try {
+          await metaAPI.actualizarAdSet(adset.metaAdSetId, {
+            presupuestoDiario: nuevoPresupuesto,
+          })
+          detalles.push(
+            `AdSet "${adset.name}" (${adset.region.code}): $${presupuestoAnterior} → $${nuevoPresupuesto} (+$${incremento}) [Meta sincronizado]`
+          )
+        } catch (errorMeta) {
+          // Error en Meta: no revirtir cambio local, solo registrar el error
+          console.error(`Error al actualizar presupuesto en Meta para adset ${adset.metaAdSetId}:`, errorMeta)
+          detalles.push(
+            `AdSet "${adset.name}" (${adset.region.code}): $${presupuestoAnterior} → $${nuevoPresupuesto} (+$${incremento}) [Error Meta: ${errorMeta instanceof Error ? errorMeta.message : 'desconocido'}]`
+          )
+        }
+      } else {
+        detalles.push(
+          `AdSet "${adset.name}" (${adset.region.code}): $${presupuestoAnterior} → $${nuevoPresupuesto} (+$${incremento}) [Solo local]`
+        )
+      }
+
       afectados++
-      detalles.push(
-        `AdSet "${adset.name}" (${adset.region.code}): $${presupuestoAnterior} → $${nuevoPresupuesto} (+$${incremento})`
-      )
     }
 
     if (detalles.length === 0) {
@@ -215,6 +240,7 @@ async function ejecutarScaleVertical(): Promise<ResultadoAccion> {
 
 // =============================================
 // Escalado Horizontal: Duplicar adsets exitosos a nuevos públicos
+// También crea el adset en Meta si la campaña tiene metaCampaignId
 // =============================================
 async function ejecutarScaleHorizontal(): Promise<ResultadoAccion> {
   const detalles: string[] = []
@@ -235,6 +261,9 @@ async function ejecutarScaleHorizontal(): Promise<ResultadoAccion> {
 
     // Tipos de audiencia disponibles para expansión
     const tiposAudiencia = ['BROAD', 'LOOKALIKE', 'CUSTOM']
+
+    // Obtener instancia de Meta API si está disponible
+    const metaAPI = await getMetaAPI()
 
     for (const adset of adsetsExitosos) {
       // Determinar el tipo de audiencia actual
@@ -273,10 +302,42 @@ async function ejecutarScaleHorizontal(): Promise<ResultadoAccion> {
             },
           })
 
+          // Intentar crear el adset en Meta si la campaña tiene metaCampaignId
+          if (adset.campaign.metaCampaignId && metaAPI) {
+            try {
+              const respuestaMeta = await metaAPI.crearAdSet({
+                nombre: nuevoAdset.name,
+                campaignId: adset.campaign.metaCampaignId,
+                presupuestoDiario: nuevoAdset.budget,
+                moneda: nuevoAdset.budgetCurrency,
+                estado: 'ACTIVE',
+                targeting: adset.targetingJson ? JSON.parse(adset.targetingJson) : undefined,
+                audienceType: nuevaAudiencia,
+              })
+
+              // Guardar el metaAdSetId devuelto por Meta
+              await db.adSet.update({
+                where: { id: nuevoAdset.id },
+                data: { metaAdSetId: respuestaMeta.id },
+              })
+
+              detalles.push(
+                `Duplicado "${adset.name}" → "${nuevoAdset.name}" (${adset.region.code}, audiencia: ${nuevaAudiencia}) [Meta ID: ${respuestaMeta.id}]`
+              )
+            } catch (errorMeta) {
+              // Error al crear en Meta: mantener registro local, registrar error
+              console.error(`Error al crear adset en Meta para campaña ${adset.campaign.metaCampaignId}:`, errorMeta)
+              detalles.push(
+                `Duplicado "${adset.name}" → "${nuevoAdset.name}" (${adset.region.code}, audiencia: ${nuevaAudiencia}) [Error Meta: ${errorMeta instanceof Error ? errorMeta.message : 'desconocido'}]`
+              )
+            }
+          } else {
+            detalles.push(
+              `Duplicado "${adset.name}" → "${nuevoAdset.name}" (${adset.region.code}, audiencia: ${nuevaAudiencia}) [Solo local]`
+            )
+          }
+
           afectados++
-          detalles.push(
-            `Duplicado "${adset.name}" → "${nuevoAdset.name}" (${adset.region.code}, audiencia: ${nuevaAudiencia})`
-          )
           break // Solo crear una duplicación por adset exitoso
         }
       }
@@ -296,6 +357,7 @@ async function ejecutarScaleHorizontal(): Promise<ResultadoAccion> {
 
 // =============================================
 // Kill Switch: Desactivar adsets con CPL excesivo
+// También pausa el adset en Meta si tiene metaAdSetId
 // =============================================
 async function ejecutarKillSwitch(): Promise<ResultadoAccion> {
   const detalles: string[] = []
@@ -316,7 +378,11 @@ async function ejecutarKillSwitch(): Promise<ResultadoAccion> {
     // Filtrar adsets donde CPL > cplKillSwitch de la región
     const adsetsConCPLExcesivo = adsets.filter(a => a.cpl > a.region.cplKillSwitch)
 
+    // Obtener instancia de Meta API si está disponible
+    const metaAPI = await getMetaAPI()
+
     for (const adset of adsetsConCPLExcesivo) {
+      // Marcar como KILLED localmente
       await db.adSet.update({
         where: { id: adset.id },
         data: {
@@ -325,10 +391,27 @@ async function ejecutarKillSwitch(): Promise<ResultadoAccion> {
         },
       })
 
+      // Intentar pausar el adset en Meta si tiene metaAdSetId
+      if (adset.metaAdSetId && metaAPI) {
+        try {
+          await metaAPI.pausarAdSet(adset.metaAdSetId)
+          detalles.push(
+            `KILL: "${adset.name}" (${adset.region.code}) - CPL: $${adset.cpl} > KillSwitch: $${adset.region.cplKillSwitch} [Meta pausado]`
+          )
+        } catch (errorMeta) {
+          // Error al pausar en Meta: no revirtir cambio local, solo registrar error
+          console.error(`Error al pausar adset en Meta ${adset.metaAdSetId}:`, errorMeta)
+          detalles.push(
+            `KILL: "${adset.name}" (${adset.region.code}) - CPL: $${adset.cpl} > KillSwitch: $${adset.region.cplKillSwitch} [Error Meta: ${errorMeta instanceof Error ? errorMeta.message : 'desconocido'}]`
+          )
+        }
+      } else {
+        detalles.push(
+          `KILL: "${adset.name}" (${adset.region.code}) - CPL: $${adset.cpl} > KillSwitch: $${adset.region.cplKillSwitch} [Solo local]`
+        )
+      }
+
       afectados++
-      detalles.push(
-        `KILL: "${adset.name}" (${adset.region.code}) - CPL: $${adset.cpl} > KillSwitch: $${adset.region.cplKillSwitch}`
-      )
     }
 
     if (detalles.length === 0) {

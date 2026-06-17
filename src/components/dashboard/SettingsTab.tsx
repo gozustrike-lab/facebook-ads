@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { StatusBadge } from './StatusBadge'
+import { MetaConnection } from './MetaConnection'
 import { toast } from 'sonner'
 import {
   Settings,
@@ -137,6 +138,9 @@ export function SettingsTab() {
 
   return (
     <div className="space-y-6">
+      {/* Conexión Meta/Facebook - Primera tarjeta, la más importante */}
+      <MetaConnection />
+
       {/* System Health */}
       <Card>
         <CardHeader className="pb-2">

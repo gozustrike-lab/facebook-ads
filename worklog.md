@@ -80,3 +80,40 @@ Stage Summary:
 - Todos los tabs renderizan correctamente
 - Datos demo se cargan y muestran en tablas y gráficos
 - API responses exitosas (200 OK)
+
+---
+Task ID: 8
+Agent: Main Agent
+Task: Integrar Meta/Facebook Graph API real
+
+Work Log:
+- Agregó modelo MetaCredential al schema Prisma (appId, appSecret, accessToken, accountId, pixelId, businessId, etc.)
+- Ejecutó db:push y db:generate para sincronizar
+- Creó /src/lib/meta-api.ts (1203 líneas) - Servicio central Meta Graph API con:
+  - MetaAPIService class: campañas, adsets, insights, CAPI, targeting, custom audiences, token management
+  - SHA-256 hashing para CAPI user_data
+  - Rate limiting con exponential backoff
+  - Factory: fromDatabase() y fromEnv()
+  - Singleton: getMetaAPI()
+- Creó /api/meta/auth/route.ts - OAuth flow (GET URL, GET callback, POST credenciales, DELETE disconnect)
+- Creó /api/meta/status/route.ts - Estado de conexión y verificación de token
+- Creó /api/meta/sync/route.ts - Sincronización de campañas e insights desde Meta
+- Creó /api/meta/webhook/route.ts - Webhooks con verificación HMAC-SHA256
+- Actualizó /api/capi/route.ts - CAPI ahora envía eventos reales si Meta está conectado
+- Actualizó /api/automation/route.ts - Escalado/Kill-Switch sincronizan cambios con Meta
+- Actualizó /api/campaigns/route.ts - Creación sincroniza con Meta
+- Actualizó /api/adsets/route.ts - Creación/actualización sincroniza con Meta
+- Creó /src/components/dashboard/MetaConnection.tsx - Panel completo de conexión Meta
+- Actualizó SettingsTab.tsx - MetaConnection como primera sección
+- Actualizó /src/lib/api.ts - Nuevas funciones: fetchMetaStatus, saveMetaCredentials, disconnectMeta, etc.
+
+Stage Summary:
+- Integración completa con Meta Graph API v21.0
+- OAuth 2.0 flow con Facebook (short-lived → long-lived token exchange)
+- CAPI con SHA-256 hashing para user_data (cumplimiento de privacidad)
+- Webhooks con verificación HMAC-SHA256
+- Todas las operaciones de campañas/adsets sincronizan bidireccionalmente con Meta
+- Panel de configuración Meta en Ajustes con: estado, credenciales, OAuth, registro de actividad
+- API /api/meta/status responde correctamente (200 OK)
+- API /api/meta/auth valida tokens y rechaza credenciales inválidas
+- 0 errores en navegador, lint limpio

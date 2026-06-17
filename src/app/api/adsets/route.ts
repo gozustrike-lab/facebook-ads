@@ -1,8 +1,9 @@
 // API de AdSets - ImmiScale Meta Engine v5
-// Gestión de conjuntos de anuncios con escalado automático
+// Gestión de conjuntos de anuncios con sincronización Meta
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getMetaAPI } from '@/lib/meta-api'
 
 // GET - Listar todos los adsets con campaña y región
 export async function GET() {
@@ -29,7 +30,7 @@ export async function GET() {
   }
 }
 
-// POST - Crear un nuevo adset
+// POST - Crear un nuevo adset (localmente y en Meta si está conectada)
 export async function POST(request: NextRequest) {
   try {
     const cuerpo = await request.json()
@@ -64,9 +65,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let metaAdSetId = cuerpo.metaAdSetId || null
+
+    // Crear adset en la base de datos local
     const nuevoAdset = await db.adSet.create({
       data: {
-        metaAdSetId: cuerpo.metaAdSetId || null,
+        metaAdSetId,
         name: cuerpo.name,
         campaignId: cuerpo.campaignId,
         regionId: cuerpo.regionId,
@@ -88,6 +92,38 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Intentar crear el adset en Meta si la API está conectada y la campaña tiene metaCampaignId
+    if (!metaAdSetId && campana.metaCampaignId) {
+      try {
+        const metaAPI = await getMetaAPI()
+        if (metaAPI) {
+          const respuestaMeta = await metaAPI.crearAdSet({
+            nombre: cuerpo.name,
+            campaignId: campana.metaCampaignId,
+            presupuestoDiario: cuerpo.budget,
+            moneda: cuerpo.budgetCurrency || region.currency,
+            estado: cuerpo.status === 'LEARNING' ? 'ACTIVE' : (cuerpo.status || 'ACTIVE'),
+            targeting: cuerpo.targetingJson ? JSON.parse(cuerpo.targetingJson) : undefined,
+            audienceType: cuerpo.audienceType || 'BROAD',
+          })
+
+          // Guardar el metaAdSetId devuelto por Meta
+          metaAdSetId = respuestaMeta.id
+
+          await db.adSet.update({
+            where: { id: nuevoAdset.id },
+            data: { metaAdSetId },
+          })
+
+          // Actualizar el objeto de respuesta con el metaAdSetId
+          nuevoAdset.metaAdSetId = metaAdSetId
+        }
+      } catch (errorMeta) {
+        // Error al crear en Meta: mantener registro local, registrar error
+        console.error('Error al crear adset en Meta:', errorMeta)
+      }
+    }
+
     return NextResponse.json(
       { exito: true, datos: nuevoAdset },
       { status: 201 }
@@ -101,7 +137,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PUT - Actualizar un adset (presupuesto, estado, etc.)
+// PUT - Actualizar un adset (presupuesto, estado, etc.) y sincronizar con Meta
 export async function PUT(request: NextRequest) {
   try {
     const cuerpo = await request.json()
@@ -116,6 +152,7 @@ export async function PUT(request: NextRequest) {
     // Verificar que el adset existe
     const adsetExistente = await db.adSet.findUnique({
       where: { id: cuerpo.id },
+      include: { campaign: true, region: true },
     })
     if (!adsetExistente) {
       return NextResponse.json(
@@ -141,6 +178,7 @@ export async function PUT(request: NextRequest) {
     if (cuerpo.killSwitchTriggered !== undefined) datosActualizacion.killSwitchTriggered = cuerpo.killSwitchTriggered
     if (cuerpo.metaAdSetId !== undefined) datosActualizacion.metaAdSetId = cuerpo.metaAdSetId
 
+    // Actualizar en la base de datos local
     const adsetActualizado = await db.adSet.update({
       where: { id: cuerpo.id },
       data: datosActualizacion,
@@ -149,6 +187,44 @@ export async function PUT(request: NextRequest) {
         region: true,
       },
     })
+
+    // Intentar sincronizar cambios con Meta si el adset tiene metaAdSetId
+    if (adsetExistente.metaAdSetId) {
+      try {
+        const metaAPI = await getMetaAPI()
+        if (metaAPI) {
+          // Construir datos de actualización para Meta
+          const datosMeta: { presupuestoDiario?: number; estado?: string; nombre?: string } = {}
+
+          if (cuerpo.budget !== undefined) {
+            datosMeta.presupuestoDiario = cuerpo.budget
+          }
+
+          // Mapear estados locales a estados de Meta
+          if (cuerpo.status !== undefined) {
+            const mapeoEstados: Record<string, string> = {
+              'ACTIVE': 'ACTIVE',
+              'PAUSED': 'PAUSED',
+              'KILLED': 'PAUSED', // KILLED en local se mapea a PAUSED en Meta
+              'LEARNING': 'ACTIVE', // LEARNING en local se mapea a ACTIVE en Meta
+            }
+            datosMeta.estado = mapeoEstados[cuerpo.status] || cuerpo.status
+          }
+
+          if (cuerpo.name !== undefined) {
+            datosMeta.nombre = cuerpo.name
+          }
+
+          // Solo llamar a Meta si hay cambios que sincronizar
+          if (Object.keys(datosMeta).length > 0) {
+            await metaAPI.actualizarAdSet(adsetExistente.metaAdSetId, datosMeta)
+          }
+        }
+      } catch (errorMeta) {
+        // Error al actualizar en Meta: mantener cambio local, registrar error
+        console.error(`Error al actualizar adset en Meta (${adsetExistente.metaAdSetId}):`, errorMeta)
+      }
+    }
 
     return NextResponse.json({
       exito: true,

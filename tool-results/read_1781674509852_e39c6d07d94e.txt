@@ -1,0 +1,1054 @@
+     1→// API de Seed - ImmiScale Meta Engine v5
+     2→// Poblado de base de datos con datos demo realistas
+     3→// ¡CRÍTICO para demostraciones!
+     4→
+     5→import { NextResponse } from 'next/server'
+     6→import { db } from '@/lib/db'
+     7→
+     8→// =============================================
+     9→// POST - Sembrar la base de datos con datos demo
+    10→// =============================================
+    11→export async function POST() {
+    12→  try {
+    13→    // =============================================
+    14→    // 1. LIMPIAR DATOS EXISTENTES (orden inverso de dependencias)
+    15→    // =============================================
+    16→    await db.cAPIEvent.deleteMany()
+    17→    await db.metric.deleteMany()
+    18→    await db.payment.deleteMany()
+    19→    await db.lead.deleteMany()
+    20→    await db.adSet.deleteMany()
+    21→    await db.campaign.deleteMany()
+    22→    await db.region.deleteMany()
+    23→    await db.chatSession.deleteMany()
+    24→
+    25→    // =============================================
+    26→    // 2. CREAR REGIONES
+    27→    // =============================================
+    28→    const regionUS = await db.region.create({
+    29→      data: {
+    30→        code: 'US',
+    31→        name: 'Estados Unidos',
+    32→        currency: 'USD',
+    33→        cplTarget: 25.0,
+    34→        cplKillSwitch: 37.5,
+    35→        language: 'es',
+    36→        isActive: true,
+    37→      },
+    38→    })
+    39→
+    40→    const regionPE = await db.region.create({
+    41→      data: {
+    42→        code: 'PE',
+    43→        name: 'Perú',
+    44→        currency: 'PEN',
+    45→        cplTarget: 35.0,
+    46→        cplKillSwitch: 52.5,
+    47→        language: 'es',
+    48→        isActive: true,
+    49→      },
+    50→    })
+    51→
+    52→    const regionCO = await db.region.create({
+    53→      data: {
+    54→        code: 'CO',
+    55→        name: 'Colombia',
+    56→        currency: 'COP',
+    57→        cplTarget: 40000.0,
+    58→        cplKillSwitch: 60000.0,
+    59→        language: 'es',
+    60→        isActive: true,
+    61→      },
+    62→    })
+    63→
+    64→    const regionMX = await db.region.create({
+    65→      data: {
+    66→        code: 'MX',
+    67→        name: 'México',
+    68→        currency: 'MXN',
+    69→        cplTarget: 450.0,
+    70→        cplKillSwitch: 675.0,
+    71→        language: 'es',
+    72→        isActive: true,
+    73→      },
+    74→    })
+    75→
+    76→    const regionGLOBAL = await db.region.create({
+    77→      data: {
+    78→        code: 'GLOBAL',
+    79→        name: 'Global',
+    80→        currency: 'USD',
+    81→        cplTarget: 30.0,
+    82→        cplKillSwitch: 45.0,
+    83→        language: 'es',
+    84→        isActive: true,
+    85→      },
+    86→    })
+    87→
+    88→    // =============================================
+    89→    // 3. CREAR CAMPAÑAS
+    90→    // =============================================
+    91→    const campana1 = await db.campaign.create({
+    92→      data: {
+    93→        metaCampaignId: 'META-CAMP-001',
+    94→        name: 'Inmigración EE.UU. - Primavera 2025',
+    95→        objective: 'LEAD_GENERATION',
+    96→        status: 'ACTIVE',
+    97→        totalBudget: 15000,
+    98→        totalSpend: 8750.50,
+    99→        matchScore: 78.5,
+   100→        autoScale: true,
+   101→        lastScaledAt: new Date(Date.now() - 48 * 60 * 60 * 1000), // Hace 48 horas
+   102→      },
+   103→    })
+   104→
+   105→    const campana2 = await db.campaign.create({
+   106→      data: {
+   107→        metaCampaignId: 'META-CAMP-002',
+   108→        name: 'EB-2 NIW Latinoamérica - Q2 2025',
+   109→        objective: 'LEAD_GENERATION',
+   110→        status: 'ACTIVE',
+   111→        totalBudget: 12000,
+   112→        totalSpend: 5230.75,
+   113→        matchScore: 82.3,
+   114→        autoScale: true,
+   115→        lastScaledAt: new Date(Date.now() - 72 * 60 * 60 * 1000), // Hace 72 horas
+   116→      },
+   117→    })
+   118→
+   119→    // =============================================
+   120→    // 4. CREAR ADSETS
+   121→    // =============================================
+   122→    const adsets = []
+   123→
+   124→    // Campaña 1: AdSets para EE.UU.
+   125→    adsets.push(
+   126→      await db.adSet.create({
+   127→        data: {
+   128→          metaAdSetId: 'META-ADSET-001',
+   129→          name: 'US - Asilo Broad Audience',
+   130→          campaignId: campana1.id,
+   131→          regionId: regionUS.id,
+   132→          budget: 150.00,
+   133→          budgetCurrency: 'USD',
+   134→          dailySpend: 142.50,
+   135→          cpl: 22.30,
+   136→          leadCount: 6,
+   137→          audienceType: 'BROAD',
+   138→          status: 'ACTIVE',
+   139→          scaleDirection: 'V',
+   140→          lastBudgetInc: new Date(Date.now() - 36 * 60 * 60 * 1000),
+   141→          killSwitchTriggered: false,
+   142→        },
+   143→      })
+   144→    )
+   145→
+   146→    adsets.push(
+   147→      await db.adSet.create({
+   148→        data: {
+   149→          metaAdSetId: 'META-ADSET-002',
+   150→          name: 'US - Work Visa Lookalike',
+   151→          campaignId: campana1.id,
+   152→          regionId: regionUS.id,
+   153→          budget: 200.00,
+   154→          budgetCurrency: 'USD',
+   155→          dailySpend: 185.20,
+   156→          cpl: 18.75,
+   157→          leadCount: 10,
+   158→          audienceType: 'LOOKALIKE',
+   159→          status: 'ACTIVE',
+   160→          scaleDirection: null,
+   161→          lastBudgetInc: new Date(Date.now() - 50 * 60 * 60 * 1000),
+   162→          killSwitchTriggered: false,
+   163→        },
+   164→      })
+   165→    )
+   166→
+   167→    adsets.push(
+   168→      await db.adSet.create({
+   169→        data: {
+   170→          metaAdSetId: 'META-ADSET-003',
+   171→          name: 'US - DACA Custom Audience',
+   172→          campaignId: campana1.id,
+   173→          regionId: regionUS.id,
+   174→          budget: 100.00,
+   175→          budgetCurrency: 'USD',
+   176→          dailySpend: 98.50,
+   177→          cpl: 40.20,
+   178→          leadCount: 2,
+   179→          audienceType: 'CUSTOM',
+   180→          status: 'KILLED',
+   181→          killSwitchTriggered: true,
+   182→        },
+   183→      })
+   184→    )
+   185→
+   186→    // Campaña 2: AdSets para Latinoamérica
+   187→    adsets.push(
+   188→      await db.adSet.create({
+   189→        data: {
+   190→          metaAdSetId: 'META-ADSET-004',
+   191→          name: 'PE - EB-2 NIW Profesionales',
+   192→          campaignId: campana2.id,
+   193→          regionId: regionPE.id,
+   194→          budget: 500.00,
+   195→          budgetCurrency: 'PEN',
+   196→          dailySpend: 425.30,
+   197→          cpl: 28.50,
+   198→          leadCount: 15,
+   199→          audienceType: 'LOOKALIKE',
+   200→          status: 'ACTIVE',
+   201→          scaleDirection: 'V',
+   202→          lastBudgetInc: new Date(Date.now() - 30 * 60 * 60 * 1000),
+   203→          killSwitchTriggered: false,
+   204→        },
+   205→      })
+   206→    )
+   207→
+   208→    adsets.push(
+   209→      await db.adSet.create({
+   210→        data: {
+   211→          metaAdSetId: 'META-ADSET-005',
+   212→          name: 'CO - Inversores Broad',
+   213→          campaignId: campana2.id,
+   214→          regionId: regionCO.id,
+   215→          budget: 80000.00,
+   216→          budgetCurrency: 'COP',
+   217→          dailySpend: 65000.00,
+   218→          cpl: 35000.00,
+   219→          leadCount: 2,
+   220→          audienceType: 'BROAD',
+   221→          status: 'ACTIVE',
+   222→          scaleDirection: null,
+   223→          lastBudgetInc: null,
+   224→          killSwitchTriggered: false,
+   225→        },
+   226→      })
+   227→    )
+   228→
+   229→    adsets.push(
+   230→      await db.adSet.create({
+   231→        data: {
+   232→          metaAdSetId: 'META-ADSET-006',
+   233→          name: 'MX - Familia Custom',
+   234→          campaignId: campana2.id,
+   235→          regionId: regionMX.id,
+   236→          budget: 3000.00,
+   237→          budgetCurrency: 'MXN',
+   238→          dailySpend: 2800.00,
+   239→          cpl: 380.00,
+   240→          leadCount: 7,
+   241→          audienceType: 'CUSTOM',
+   242→          status: 'ACTIVE',
+   243→          scaleDirection: 'H',
+   244→          lastBudgetInc: new Date(Date.now() - 60 * 60 * 60 * 1000),
+   245→          killSwitchTriggered: false,
+   246→        },
+   247→      })
+   248→    )
+   249→
+   250→    adsets.push(
+   251→      await db.adSet.create({
+   252→        data: {
+   253→          metaAdSetId: 'META-ADSET-007',
+   254→          name: 'GLOBAL - NIW Multi-País',
+   255→          campaignId: campana2.id,
+   256→          regionId: regionGLOBAL.id,
+   257→          budget: 250.00,
+   258→          budgetCurrency: 'USD',
+   259→          dailySpend: 230.00,
+   260→          cpl: 26.80,
+   261→          leadCount: 9,
+   262→          audienceType: 'BROAD',
+   263→          status: 'LEARNING',
+   264→          scaleDirection: null,
+   265→          lastBudgetInc: null,
+   266→          killSwitchTriggered: false,
+   267→        },
+   268→      })
+   269→    )
+   270→
+   271→    adsets.push(
+   272→      await db.adSet.create({
+   273→        data: {
+   274→          metaAdSetId: 'META-ADSET-008',
+   275→          name: 'PE - Asilo Lookalike',
+   276→          campaignId: campana2.id,
+   277→          regionId: regionPE.id,
+   278→          budget: 350.00,
+   279→          budgetCurrency: 'PEN',
+   280→          dailySpend: 340.00,
+   281→          cpl: 55.00,
+   282→          leadCount: 6,
+   283→          audienceType: 'LOOKALIKE',
+   284→          status: 'PAUSED',
+   285→          killSwitchTriggered: false,
+   286→        },
+   287→      })
+   288→    )
+   289→
+   290→    // =============================================
+   291→    // 5. CREAR LEADS (~15)
+   292→    // =============================================
+   293→    const leads = []
+   294→
+   295→    // Lead 1: US - IN_COUNTRY - Calificado
+   296→    leads.push(
+   297→      await db.lead.create({
+   298→        data: {
+   299→          firstName: 'María',
+   300→          lastName: 'González',
+   301→          email: 'maria.gonzalez@email.com',
+   302→          phone: '+1-305-555-0101',
+   303→          country: 'US',
+   304→          regionId: regionUS.id,
+   305→          route: 'IN_COUNTRY_US',
+   306→          visaType: 'ASILO',
+   307→          hasCriminalRecord: false,
+   308→          investmentCapacity: null,
+   309→          hasUniversityDegree: true,
+   310→          hasUsFamily: true,
+   311→          solvencyVerified: null,
+   312→          qualificationScore: 75,
+   313→          status: 'QUALIFIED',
+   314→          source: 'META_ADS',
+   315→          metaAdId: 'META-ADSET-001',
+   316→          notes: 'Caso de asilo fuerte, sin récord criminal',
+   317→          createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+   318→        },
+   319→      })
+   320→    )
+   321→
+   322→    // Lead 2: US - IN_COUNTRY - Nuevo
+   323→    leads.push(
+   324→      await db.lead.create({
+   325→        data: {
+   326→          firstName: 'Carlos',
+   327→          lastName: 'Martínez',
+   328→          email: 'carlos.m@email.com',
+   329→          phone: '+1-213-555-0202',
+   330→          country: 'US',
+   331→          regionId: regionUS.id,
+   332→          route: 'IN_COUNTRY_US',
+   333→          visaType: 'WORK',
+   334→          hasCriminalRecord: false,
+   335→          investmentCapacity: null,
+   336→          hasUniversityDegree: true,
+   337→          hasUsFamily: false,
+   338→          solvencyVerified: null,
+   339→          qualificationScore: 60,
+   340→          status: 'NEW',
+   341→          source: 'META_ADS',
+   342→          metaAdId: 'META-ADSET-002',
+   343→          notes: 'Interesado en H-1B, ingeniero de software',
+   344→          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+   345→        },
+   346→      })
+   347→    )
+   348→
+   349→    // Lead 3: US - IN_COUNTRY - Contactado
+   350→    leads.push(
+   351→      await db.lead.create({
+   352→        data: {
+   353→          firstName: 'Ana',
+   354→          lastName: 'Rodríguez',
+   355→          email: 'ana.r@email.com',
+   356→          phone: '+1-713-555-0303',
+   357→          country: 'US',
+   358→          regionId: regionUS.id,
+   359→          route: 'IN_COUNTRY_US',
+   360→          visaType: 'ASILO',
+   361→          hasCriminalRecord: false,
+   362→          investmentCapacity: null,
+   363→          hasUniversityDegree: false,
+   364→          hasUsFamily: true,
+   365→          solvencyVerified: null,
+   366→          qualificationScore: 55,
+   367→          status: 'CONTACTED',
+   368→          source: 'META_ADS',
+   369→          metaAdId: 'META-ADSET-001',
+   370→          createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+   371→        },
+   372→      })
+   373→    )
+   374→
+   375→    // Lead 4: PE - OUT_COUNTRY - Calificado
+   376→    leads.push(
+   377→      await db.lead.create({
+   378→        data: {
+   379→          firstName: 'Jorge',
+   380→          lastName: 'Quispe',
+   381→          email: 'jorge.quispe@email.com',
+   382→          phone: '+51-999-555-0101',
+   383→          country: 'PE',
+   384→          regionId: regionPE.id,
+   385→          route: 'OUT_COUNTRY_GLOBAL',
+   386→          visaType: 'EB2_NIW',
+   387→          hasCriminalRecord: false,
+   388→          investmentCapacity: 'MEDIUM',
+   389→          hasUniversityDegree: true,
+   390→          hasUsFamily: false,
+   391→          solvencyVerified: true,
+   392→          qualificationScore: 85,
+   393→          status: 'QUALIFIED',
+   394→          source: 'META_ADS',
+   395→          metaAdId: 'META-ADSET-004',
+   396→          notes: 'Ingeniero civil con maestría, excelente perfil EB-2 NIW',
+   397→          createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+   398→        },
+   399→      })
+   400→    )
+   401→
+   402→    // Lead 5: PE - OUT_COUNTRY - Pagado
+   403→    leads.push(
+   404→      await db.lead.create({
+   405→        data: {
+   406→          firstName: 'Lucía',
+   407→          lastName: 'Mendoza',
+   408→          email: 'lucia.m@email.com',
+   409→          phone: '+51-999-555-0202',
+   410→          country: 'PE',
+   411→          regionId: regionPE.id,
+   412→          route: 'OUT_COUNTRY_GLOBAL',
+   413→          visaType: 'EB2_NIW',
+   414→          hasCriminalRecord: false,
+   415→          investmentCapacity: 'HIGH',
+   416→          hasUniversityDegree: true,
+   417→          hasUsFamily: true,
+   418→          solvencyVerified: true,
+   419→          qualificationScore: 92,
+   420→          status: 'PAID',
+   421→          source: 'META_ADS',
+   422→          metaAdId: 'META-ADSET-004',
+   423→          notes: 'Médica con especialidad, ya pagó consulta inicial',
+   424→          createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+   425→        },
+   426→      })
+   427→    )
+   428→
+   429→    // Lead 6: CO - OUT_COUNTRY - Nuevo
+   430→    leads.push(
+   431→      await db.lead.create({
+   432→        data: {
+   433→          firstName: 'Andrés',
+   434→          lastName: 'López',
+   435→          email: 'andres.l@email.com',
+   436→          phone: '+57-310-555-0101',
+   437→          country: 'CO',
+   438→          regionId: regionCO.id,
+   439→          route: 'OUT_COUNTRY_GLOBAL',
+   440→          visaType: 'EB2_NIW',
+   441→          hasCriminalRecord: false,
+   442→          investmentCapacity: 'MEDIUM',
+   443→          hasUniversityDegree: true,
+   444→          hasUsFamily: false,
+   445→          solvencyVerified: true,
+   446→          qualificationScore: 70,
+   447→          status: 'NEW',
+   448→          source: 'META_ADS',
+   449→          metaAdId: 'META-ADSET-005',
+   450→          notes: 'Arquitecto con experiencia internacional',
+   451→          createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+   452→        },
+   453→      })
+   454→    )
+   455→
+   456→    // Lead 7: CO - OUT_COUNTRY - Descalificado
+   457→    leads.push(
+   458→      await db.lead.create({
+   459→        data: {
+   460→          firstName: 'Pedro',
+   461→          lastName: 'García',
+   462→          email: 'pedro.g@email.com',
+   463→          phone: '+57-320-555-0202',
+   464→          country: 'CO',
+   465→          regionId: regionCO.id,
+   466→          route: 'OUT_COUNTRY_GLOBAL',
+   467→          visaType: 'OTHER',
+   468→          hasCriminalRecord: true,
+   469→          investmentCapacity: 'LOW',
+   470→          hasUniversityDegree: false,
+   471→          hasUsFamily: false,
+   472→          solvencyVerified: false,
+   473→          qualificationScore: 15,
+   474→          status: 'DISQUALIFIED',
+   475→          source: 'META_ADS',
+   476→          metaAdId: 'META-ADSET-005',
+   477→          notes: 'Perfil no califica bajo ninguna ruta estándar',
+   478→          createdAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+   479→        },
+   480→      })
+   481→    )
+   482→
+   483→    // Lead 8: MX - OUT_COUNTRY - Calificado
+   484→    leads.push(
+   485→      await db.lead.create({
+   486→        data: {
+   487→          firstName: 'Sofía',
+   488→          lastName: 'Hernández',
+   489→          email: 'sofia.h@email.com',
+   490→          phone: '+52-555-555-0101',
+   491→          country: 'MX',
+   492→          regionId: regionMX.id,
+   493→          route: 'OUT_COUNTRY_GLOBAL',
+   494→          visaType: 'FAMILY',
+   495→          hasCriminalRecord: false,
+   496→          investmentCapacity: 'MEDIUM',
+   497→          hasUniversityDegree: true,
+   498→          hasUsFamily: true,
+   499→          solvencyVerified: true,
+   500→          qualificationScore: 78,
+   501→          status: 'QUALIFIED',
+   502→          source: 'META_ADS',
+   503→          metaAdId: 'META-ADSET-006',
+   504→          notes: 'Hermana es ciudadana americana, petición familiar',
+   505→          createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+   506→        },
+   507→      })
+   508→    )
+   509→
+   510→    // Lead 9: MX - OUT_COUNTRY - Nuevo
+   511→    leads.push(
+   512→      await db.lead.create({
+   513→        data: {
+   514→          firstName: 'Roberto',
+   515→          lastName: 'Díaz',
+   516→          email: 'roberto.d@email.com',
+   517→          phone: '+52-333-555-0202',
+   518→          country: 'MX',
+   519→          regionId: regionMX.id,
+   520→          route: 'OUT_COUNTRY_GLOBAL',
+   521→          visaType: 'EB2_NIW',
+   522→          hasCriminalRecord: false,
+   523→          investmentCapacity: 'LOW',
+   524→          hasUniversityDegree: true,
+   525→          hasUsFamily: false,
+   526→          solvencyVerified: false,
+   527→          qualificationScore: 45,
+   528→          status: 'NEW',
+   529→          source: 'ORGANIC',
+   530→          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+   531→        },
+   532→      })
+   533→    )
+   534→
+   535→    // Lead 10: GLOBAL - OUT_COUNTRY - Contactado
+   536→    leads.push(
+   537→      await db.lead.create({
+   538→        data: {
+   539→          firstName: 'Elena',
+   540→          lastName: 'Petrova',
+   541→          email: 'elena.p@email.com',
+   542→          phone: '+7-916-555-0101',
+   543→          country: 'GLOBAL',
+   544→          regionId: regionGLOBAL.id,
+   545→          route: 'OUT_COUNTRY_GLOBAL',
+   546→          visaType: 'EB2_NIW',
+   547→          hasCriminalRecord: false,
+   548→          investmentCapacity: 'HIGH',
+   549→          hasUniversityDegree: true,
+   550→          hasUsFamily: false,
+   551→          solvencyVerified: true,
+   552→          qualificationScore: 80,
+   553→          status: 'CONTACTED',
+   554→          source: 'REFERRAL',
+   555→          notes: 'Referida por cliente existente, científica de datos',
+   556→          createdAt: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
+   557→        },
+   558→      })
+   559→    )
+   560→
+   561→    // Lead 11: US - IN_COUNTRY - Perdido
+   562→    leads.push(
+   563→      await db.lead.create({
+   564→        data: {
+   565→          firstName: 'Miguel',
+   566→          lastName: 'Torres',
+   567→          email: 'miguel.t@email.com',
+   568→          phone: '+1-956-555-0404',
+   569→          country: 'US',
+   570→          regionId: regionUS.id,
+   571→          route: 'IN_COUNTRY_US',
+   572→          visaType: 'WORK',
+   573→          hasCriminalRecord: true,
+   574→          investmentCapacity: null,
+   575→          hasUniversityDegree: false,
+   576→          hasUsFamily: false,
+   577→          solvencyVerified: null,
+   578→          qualificationScore: 20,
+   579→          status: 'LOST',
+   580→          source: 'META_ADS',
+   581→          metaAdId: 'META-ADSET-003',
+   582→          notes: 'Récord criminal complicado, decidió no proceder',
+   583→          createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+   584→        },
+   585→      })
+   586→    )
+   587→
+   588→    // Lead 12: PE - OUT_COUNTRY - Contactado
+   589→    leads.push(
+   590→      await db.lead.create({
+   591→        data: {
+   592→          firstName: 'Rosa',
+   593→          lastName: 'Flores',
+   594→          email: 'rosa.f@email.com',
+   595→          phone: '+51-988-555-0303',
+   596→          country: 'PE',
+   597→          regionId: regionPE.id,
+   598→          route: 'OUT_COUNTRY_GLOBAL',
+   599→          visaType: 'FAMILY',
+   600→          hasCriminalRecord: false,
+   601→          investmentCapacity: 'LOW',
+   602→          hasUniversityDegree: false,
+   603→          hasUsFamily: true,
+   604→          solvencyVerified: false,
+   605→          qualificationScore: 50,
+   606→          status: 'CONTACTED',
+   607→          source: 'META_ADS',
+   608→          metaAdId: 'META-ADSET-008',
+   609→          notes: 'Esposo es residente, posible petición familiar',
+   610→          createdAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+   611→        },
+   612→      })
+   613→    )
+   614→
+   615→    // Lead 13: GLOBAL - Calificado via chatbot
+   616→    leads.push(
+   617→      await db.lead.create({
+   618→        data: {
+   619→          firstName: null,
+   620→          lastName: null,
+   621→          email: null,
+   622→          phone: null,
+   623→          country: 'AR',
+   624→          regionId: regionGLOBAL.id,
+   625→          route: 'OUT_COUNTRY_GLOBAL',
+   626→          visaType: 'EB2_NIW',
+   627→          hasCriminalRecord: false,
+   628→          investmentCapacity: 'HIGH',
+   629→          hasUniversityDegree: true,
+   630→          hasUsFamily: false,
+   631→          solvencyVerified: true,
+   632→          qualificationScore: 88,
+   633→          status: 'QUALIFIED',
+   634→          source: 'CHATBOT',
+   635→          notes: 'Pre-calificación automática: ALTA_PROBABILIDAD',
+   636→          createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+   637→        },
+   638→      })
+   639→    )
+   640→
+   641→    // Lead 14: CO - Nuevo
+   642→    leads.push(
+   643→      await db.lead.create({
+   644→        data: {
+   645→          firstName: 'Valentina',
+   646→          lastName: 'Ruiz',
+   647→          email: 'valentina.r@email.com',
+   648→          phone: '+57-315-555-0303',
+   649→          country: 'CO',
+   650→          regionId: regionCO.id,
+   651→          route: 'OUT_COUNTRY_GLOBAL',
+   652→          visaType: 'EB2_NIW',
+   653→          hasCriminalRecord: false,
+   654→          investmentCapacity: 'MEDIUM',
+   655→          hasUniversityDegree: true,
+   656→          hasUsFamily: true,
+   657→          solvencyVerified: true,
+   658→          qualificationScore: 72,
+   659→          status: 'NEW',
+   660→          source: 'META_ADS',
+   661→          metaAdId: 'META-ADSET-005',
+   662→          notes: 'Abogada con maestría en derecho internacional',
+   663→          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+   664→        },
+   665→      })
+   666→    )
+   667→
+   668→    // Lead 15: MX - Pagado
+   669→    leads.push(
+   670→      await db.lead.create({
+   671→        data: {
+   672→          firstName: 'Fernando',
+   673→          lastName: 'Castro',
+   674→          email: 'fernando.c@email.com',
+   675→          phone: '+52-811-555-0303',
+   676→          country: 'MX',
+   677→          regionId: regionMX.id,
+   678→          route: 'OUT_COUNTRY_GLOBAL',
+   679→          visaType: 'FAMILY',
+   680→          hasCriminalRecord: false,
+   681→          investmentCapacity: 'HIGH',
+   682→          hasUniversityDegree: true,
+   683→          hasUsFamily: true,
+   684→          solvencyVerified: true,
+   685→          qualificationScore: 90,
+   686→          status: 'PAID',
+   687→          source: 'META_ADS',
+   688→          metaAdId: 'META-ADSET-006',
+   689→          notes: 'Padre ciudadano, ya pagó consulta completa',
+   690→          createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+   691→        },
+   692→      })
+   693→    )
+   694→
+   695→    // =============================================
+   696→    // 6. CREAR PAGOS (~8)
+   697→    // =============================================
+   698→    const pagos = []
+   699→
+   700→    // Pago 1: Lucía (PE) - Completado en PEN via Niubiz
+   701→    pagos.push(
+   702→      await db.payment.create({
+   703→        data: {
+   704→          leadId: leads[4].id, // Lucía Mendoza
+   705→          amount: 500.00,
+   706→          currency: 'PEN',
+   707→          amountUsd: 133.33,
+   708→          exchangeRate: 3.75,
+   709→          gateway: 'NIUBIZ',
+   710→          gatewayRefId: 'NBZ-PE-001',
+   711→          status: 'COMPLETED',
+   712→          description: 'Consulta inicial EB-2 NIW',
+   713→          paidAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+   714→        },
+   715→      })
+   716→    )
+   717→
+   718→    // Pago 2: Lucía (PE) - Segundo pago completado via MercadoPago
+   719→    pagos.push(
+   720→      await db.payment.create({
+   721→        data: {
+   722→          leadId: leads[4].id, // Lucía Mendoza
+   723→          amount: 2500.00,
+   724→          currency: 'PEN',
+   725→          amountUsd: 666.67,
+   726→          exchangeRate: 3.75,
+   727→          gateway: 'MERCADO_PAGO',
+   728→          gatewayRefId: 'MP-PE-002',
+   729→          status: 'COMPLETED',
+   730→          description: 'Servicio completo EB-2 NIW - Primera cuota',
+   731→          paidAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+   732→        },
+   733→      })
+   734→    )
+   735→
+   736→    // Pago 3: Fernando (MX) - Completado en MXN via Stripe
+   737→    pagos.push(
+   738→      await db.payment.create({
+   739→        data: {
+   740→          leadId: leads[14].id, // Fernando Castro
+   741→          amount: 8000.00,
+   742→          currency: 'MXN',
+   743→          amountUsd: 470.59,
+   744→          exchangeRate: 17.0,
+   745→          gateway: 'STRIPE',
+   746→          gatewayRefId: 'STP-MX-001',
+   747→          status: 'COMPLETED',
+   748→          description: 'Consulta completa petición familiar',
+   749→          paidAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000),
+   750→        },
+   751→      })
+   752→    )
+   753→
+   754→    // Pago 4: Andrés (CO) - Pendiente en COP via Culqi
+   755→    pagos.push(
+   756→      await db.payment.create({
+   757→        data: {
+   758→          leadId: leads[5].id, // Andrés López
+   759→          amount: 350000.00,
+   760→          currency: 'COP',
+   761→          amountUsd: 81.40,
+   762→          exchangeRate: 4300.0,
+   763→          gateway: 'CULQI',
+   764→          gatewayRefId: null,
+   765→          status: 'PENDING',
+   766→          description: 'Consulta inicial EB-2 NIW',
+   767→        },
+   768→      })
+   769→    )
+   770→
+   771→    // Pago 5: María (US) - Completado en USD via Stripe
+   772→    pagos.push(
+   773→      await db.payment.create({
+   774→        data: {
+   775→          leadId: leads[0].id, // María González
+   776→          amount: 250.00,
+   777→          currency: 'USD',
+   778→          amountUsd: 250.00,
+   779→          exchangeRate: 1.0,
+   780→          gateway: 'STRIPE',
+   781→          gatewayRefId: 'STP-US-001',
+   782→          status: 'COMPLETED',
+   783→          description: 'Consulta asilo político',
+   784→          paidAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+   785→        },
+   786→      })
+   787→    )
+   788→
+   789→    // Pago 6: Sofia (MX) - Fallido en MXN
+   790→    pagos.push(
+   791→      await db.payment.create({
+   792→        data: {
+   793→          leadId: leads[7].id, // Sofía Hernández
+   794→          amount: 5000.00,
+   795→          currency: 'MXN',
+   796→          amountUsd: 294.12,
+   797→          exchangeRate: 17.0,
+   798→          gateway: 'STRIPE',
+   799→          gatewayRefId: 'STP-MX-002',
+   800→          status: 'FAILED',
+   801→          description: 'Consulta petición familiar - tarjeta declinada',
+   802→        },
+   803→      })
+   804→    )
+   805→
+   806→    // Pago 7: Elena (GLOBAL) - Completado en USD via Stripe
+   807→    pagos.push(
+   808→      await db.payment.create({
+   809→        data: {
+   810→          leadId: leads[9].id, // Elena Petrova
+   811→          amount: 350.00,
+   812→          currency: 'USD',
+   813→          amountUsd: 350.00,
+   814→          exchangeRate: 1.0,
+   815→          gateway: 'STRIPE',
+   816→          gatewayRefId: 'STP-GL-001',
+   817→          status: 'COMPLETED',
+   818→          description: 'Consulta EB-2 NIW - pago internacional',
+   819→          paidAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+   820→        },
+   821→      })
+   822→    )
+   823→
+   824→    // Pago 8: Carlos (US) - Reembolsado
+   825→    pagos.push(
+   826→      await db.payment.create({
+   827→        data: {
+   828→          leadId: leads[1].id, // Carlos Martínez
+   829→          amount: 150.00,
+   830→          currency: 'USD',
+   831→          amountUsd: 150.00,
+   832→          exchangeRate: 1.0,
+   833→          gateway: 'STRIPE',
+   834→          gatewayRefId: 'STP-US-002',
+   835→          status: 'REFUNDED',
+   836→          description: 'Consulta H-1B - reembolso solicitado',
+   837→          paidAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+   838→        },
+   839→      })
+   840→    )
+   841→
+   842→    // =============================================
+   843→    // 7. CREAR MÉTRICAS (últimos 7 días por región)
+   844→    // =============================================
+   845→    const fechaBase = new Date()
+   846→    fechaBase.setHours(0, 0, 0, 0)
+   847→
+   848→    // Datos de métricas por región y día
+   849→    const datosMetricas: {
+   850→      regionId: string
+   851→      regionCode: string
+   852→      dias: {
+   853→        offset: number
+   854→        totalSpend: number
+   855→        leadCount: number
+   856→        qualifiedCount: number
+   857→        paidCount: number
+   858→        cpql: number
+   859→        cpl: number
+   860→        revenue: number
+   861→        matchScore: number
+   862→      }[]
+   863→    }[] = [
+   864→      {
+   865→        regionId: regionUS.id,
+   866→        regionCode: 'US',
+   867→        dias: [
+   868→          { offset: 6, totalSpend: 380, leadCount: 15, qualifiedCount: 9, paidCount: 2, cpql: 42.2, cpl: 25.3, revenue: 500, matchScore: 75.0 },
+   869→          { offset: 5, totalSpend: 420, leadCount: 18, qualifiedCount: 11, paidCount: 3, cpql: 38.2, cpl: 23.3, revenue: 750, matchScore: 78.0 },
+   870→          { offset: 4, totalSpend: 350, leadCount: 14, qualifiedCount: 8, paidCount: 1, cpql: 43.8, cpl: 25.0, revenue: 250, matchScore: 72.0 },
+   871→          { offset: 3, totalSpend: 395, leadCount: 16, qualifiedCount: 10, paidCount: 2, cpql: 39.5, cpl: 24.7, revenue: 500, matchScore: 76.0 },
+   872→          { offset: 2, totalSpend: 410, leadCount: 17, qualifiedCount: 12, paidCount: 4, cpql: 34.2, cpl: 24.1, revenue: 1000, matchScore: 80.0 },
+   873→          { offset: 1, totalSpend: 430, leadCount: 19, qualifiedCount: 13, paidCount: 3, cpql: 33.1, cpl: 22.6, revenue: 750, matchScore: 82.0 },
+   874→          { offset: 0, totalSpend: 327.70, leadCount: 18, qualifiedCount: 12, paidCount: 2, cpql: 27.3, cpl: 18.2, revenue: 500, matchScore: 78.5 },
+   875→        ],
+   876→      },
+   877→      {
+   878→        regionId: regionPE.id,
+   879→        regionCode: 'PE',
+   880→        dias: [
+   881→          { offset: 6, totalSpend: 1200, leadCount: 20, qualifiedCount: 14, paidCount: 3, cpql: 85.7, cpl: 60.0, revenue: 1500, matchScore: 80.0 },
+   882→          { offset: 5, totalSpend: 1350, leadCount: 22, qualifiedCount: 16, paidCount: 4, cpql: 84.4, cpl: 61.4, revenue: 2000, matchScore: 82.0 },
+   883→          { offset: 4, totalSpend: 1100, leadCount: 18, qualifiedCount: 12, paidCount: 2, cpql: 91.7, cpl: 61.1, revenue: 1000, matchScore: 78.0 },
+   884→          { offset: 3, totalSpend: 1250, leadCount: 21, qualifiedCount: 15, paidCount: 3, cpql: 83.3, cpl: 59.5, revenue: 1500, matchScore: 81.0 },
+   885→          { offset: 2, totalSpend: 1300, leadCount: 23, qualifiedCount: 17, paidCount: 5, cpql: 76.5, cpl: 56.5, revenue: 2500, matchScore: 84.0 },
+   886→          { offset: 1, totalSpend: 1400, leadCount: 25, qualifiedCount: 18, paidCount: 4, cpql: 77.8, cpl: 56.0, revenue: 2000, matchScore: 83.0 },
+   887→          { offset: 0, totalSpend: 425.30, leadCount: 15, qualifiedCount: 10, paidCount: 2, cpql: 42.5, cpl: 28.5, revenue: 1000, matchScore: 82.3 },
+   888→        ],
+   889→      },
+   890→      {
+   891→        regionId: regionCO.id,
+   892→        regionCode: 'CO',
+   893→        dias: [
+   894→          { offset: 6, totalSpend: 180000, leadCount: 3, qualifiedCount: 2, paidCount: 0, cpql: 90000, cpl: 60000, revenue: 0, matchScore: 65.0 },
+   895→          { offset: 5, totalSpend: 195000, leadCount: 4, qualifiedCount: 2, paidCount: 1, cpql: 97500, cpl: 48750, revenue: 350000, matchScore: 68.0 },
+   896→          { offset: 4, totalSpend: 170000, leadCount: 3, qualifiedCount: 1, paidCount: 0, cpql: 170000, cpl: 56667, revenue: 0, matchScore: 62.0 },
+   897→          { offset: 3, totalSpend: 200000, leadCount: 5, qualifiedCount: 3, paidCount: 1, cpql: 66667, cpl: 40000, revenue: 350000, matchScore: 70.0 },
+   898→          { offset: 2, totalSpend: 210000, leadCount: 5, qualifiedCount: 3, paidCount: 0, cpql: 70000, cpl: 42000, revenue: 0, matchScore: 71.0 },
+   899→          { offset: 1, totalSpend: 185000, leadCount: 4, qualifiedCount: 3, paidCount: 1, cpql: 61667, cpl: 46250, revenue: 350000, matchScore: 69.0 },
+   900→          { offset: 0, totalSpend: 65000, leadCount: 2, qualifiedCount: 1, paidCount: 0, cpql: 65000, cpl: 32500, revenue: 0, matchScore: 67.0 },
+   901→        ],
+   902→      },
+   903→      {
+   904→        regionId: regionMX.id,
+   905→        regionCode: 'MX',
+   906→        dias: [
+   907→          { offset: 6, totalSpend: 7200, leadCount: 12, qualifiedCount: 7, paidCount: 1, cpql: 1028.6, cpl: 600, revenue: 8000, matchScore: 74.0 },
+   908→          { offset: 5, totalSpend: 7800, leadCount: 14, qualifiedCount: 9, paidCount: 2, cpql: 866.7, cpl: 557.1, revenue: 16000, matchScore: 76.0 },
+   909→          { offset: 4, totalSpend: 6500, leadCount: 10, qualifiedCount: 6, paidCount: 1, cpql: 1083.3, cpl: 650, revenue: 8000, matchScore: 72.0 },
+   910→          { offset: 3, totalSpend: 7100, leadCount: 13, qualifiedCount: 8, paidCount: 2, cpql: 887.5, cpl: 546.2, revenue: 16000, matchScore: 75.0 },
+   911→          { offset: 2, totalSpend: 7500, leadCount: 14, qualifiedCount: 10, paidCount: 3, cpql: 750, cpl: 535.7, revenue: 24000, matchScore: 78.0 },
+   912→          { offset: 1, totalSpend: 7800, leadCount: 15, qualifiedCount: 11, paidCount: 2, cpql: 709.1, cpl: 520, revenue: 16000, matchScore: 77.0 },
+   913→          { offset: 0, totalSpend: 2800, leadCount: 7, qualifiedCount: 5, paidCount: 1, cpql: 560, cpl: 400, revenue: 8000, matchScore: 76.0 },
+   914→        ],
+   915→      },
+   916→      {
+   917→        regionId: regionGLOBAL.id,
+   918→        regionCode: 'GLOBAL',
+   919→        dias: [
+   920→          { offset: 6, totalSpend: 180, leadCount: 6, qualifiedCount: 4, paidCount: 1, cpql: 45, cpl: 30, revenue: 350, matchScore: 80.0 },
+   921→          { offset: 5, totalSpend: 210, leadCount: 7, qualifiedCount: 5, paidCount: 1, cpql: 42, cpl: 30, revenue: 350, matchScore: 82.0 },
+   922→          { offset: 4, totalSpend: 170, leadCount: 5, qualifiedCount: 3, paidCount: 0, cpql: 56.7, cpl: 34, revenue: 0, matchScore: 78.0 },
+   923→          { offset: 3, totalSpend: 200, leadCount: 7, qualifiedCount: 5, paidCount: 2, cpql: 40, cpl: 28.6, revenue: 700, matchScore: 81.0 },
+   924→          { offset: 2, totalSpend: 220, leadCount: 8, qualifiedCount: 6, paidCount: 1, cpql: 36.7, cpl: 27.5, revenue: 350, matchScore: 83.0 },
+   925→          { offset: 1, totalSpend: 230, leadCount: 8, qualifiedCount: 6, paidCount: 2, cpql: 38.3, cpl: 28.8, revenue: 700, matchScore: 82.0 },
+   926→          { offset: 0, totalSpend: 230, leadCount: 9, qualifiedCount: 7, paidCount: 1, cpql: 32.9, cpl: 25.6, revenue: 350, matchScore: 82.3 },
+   927→        ],
+   928→      },
+   929→    ]
+   930→
+   931→    for (const datosRegion of datosMetricas) {
+   932→      for (const dia of datosRegion.dias) {
+   933→        const fecha = new Date(fechaBase)
+   934→        fecha.setDate(fecha.getDate() - dia.offset)
+   935→
+   936→        await db.metric.create({
+   937→          data: {
+   938→            regionId: datosRegion.regionId,
+   939→            date: fecha,
+   940→            totalSpend: dia.totalSpend,
+   941→            leadCount: dia.leadCount,
+   942→            qualifiedCount: dia.qualifiedCount,
+   943→            paidCount: dia.paidCount,
+   944→            cpql: dia.cpql,
+   945→            cpl: dia.cpl,
+   946→            revenue: dia.revenue,
+   947→            matchScore: dia.matchScore,
+   948→            currency: datosRegion.regionCode === 'US' || datosRegion.regionCode === 'GLOBAL'
+   949→              ? 'USD'
+   950→              : datosRegion.regionCode === 'PE'
+   951→                ? 'PEN'
+   952→                : datosRegion.regionCode === 'CO'
+   953→                  ? 'COP'
+   954→                  : 'MXN',
+   955→          },
+   956→        })
+   957→      }
+   958→    }
+   959→
+   960→    // =============================================
+   961→    // 8. CREAR EVENTOS CAPI
+   962→    // =============================================
+   963→    const eventosCAPI = [
+   964→      {
+   965→        eventId: 'capi-evt-001',
+   966→        eventName: 'Lead',
+   967→        sourceUrl: 'https://immiscale.com/chatbot',
+   968→        country: 'PE',
+   969→        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+   970→        fbclid: 'fb.1.1717400000.Abc123',
+   971→        fbp: 'fb.1.1717400000.1234567890',
+   972→        sentToMeta: true,
+   973→        metaResponse: 'SIMULATED_SUCCESS',
+   974→        eventTime: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+   975→      },
+   976→      {
+   977→        eventId: 'capi-evt-002',
+   978→        eventName: 'Lead',
+   979→        sourceUrl: 'https://immiscale.com/chatbot',
+   980→        country: 'CO',
+   981→        userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5)',
+   982→        fbclid: null,
+   983→        fbp: 'fb.1.1717410000.0987654321',
+   984→        sentToMeta: true,
+   985→        metaResponse: 'SIMULATED_SUCCESS',
+   986→        eventTime: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+   987→      },
+   988→      {
+   989→        eventId: 'capi-evt-003',
+   990→        eventName: 'Purchase',
+   991→        sourceUrl: 'https://immiscale.com/pago-confirmado',
+   992→        country: 'US',
+   993→        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)',
+   994→        fbclid: 'fb.1.1717420000.Xyz789',
+   995→        fbp: null,
+   996→        sentToMeta: true,
+   997→        metaResponse: 'SIMULATED_SUCCESS',
+   998→        eventTime: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+   999→      },
+  1000→      {
+  1001→        eventId: 'capi-evt-004',
+  1002→        eventName: 'CompleteRegistration',
+  1003→        sourceUrl: 'https://immiscale.com/registro',
+  1004→        country: 'MX',
+  1005→        userAgent: 'Mozilla/5.0 (Linux; Android 14)',
+  1006→        fbclid: null,
+  1007→        fbp: 'fb.1.1717430000.5678901234',
+  1008→        sentToMeta: false,
+  1009→        metaResponse: null,
+  1010→        eventTime: new Date(Date.now() - 12 * 60 * 60 * 1000),
+  1011→      },
+  1012→      {
+  1013→        eventId: 'capi-evt-005',
+  1014→        eventName: 'Lead',
+  1015→        sourceUrl: 'https://immiscale.com/chatbot',
+  1016→        country: 'PE',
+  1017→        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+  1018→        fbclid: 'fb.1.1717440000.Def456',
+  1019→        fbp: 'fb.1.1717440000.1122334455',
+  1020→        sentToMeta: true,
+  1021→        metaResponse: 'SIMULATED_SUCCESS',
+  1022→        eventTime: new Date(Date.now() - 4 * 60 * 60 * 1000),
+  1023→      },
+  1024→    ]
+  1025→
+  1026→    for (const evento of eventosCAPI) {
+  1027→      await db.cAPIEvent.create({ data: evento })
+  1028→    }
+  1029→
+  1030→    // =============================================
+  1031→    // RESPUESTA FINAL
+  1032→    // =============================================
+  1033→    return NextResponse.json({
+  1034→      exito: true,
+  1035→      mensaje: 'Base de datos sembrada exitosamente con datos demo',
+  1036→      resumen: {
+  1037→        regiones: 5,
+  1038→        campanas: 2,
+  1039→        adsets: adsets.length,
+  1040→        leads: leads.length,
+  1041→        pagos: pagos.length,
+  1042→        metricas: datosMetricas.reduce((acc, d) => acc + d.dias.length, 0),
+  1043→        eventosCAPI: eventosCAPI.length,
+  1044→      },
+  1045→    })
+  1046→  } catch (error) {
+  1047→    console.error('Error al sembrar base de datos:', error)
+  1048→    return NextResponse.json(
+  1049→      { exito: false, error: 'Error al sembrar base de datos', detalles: error instanceof Error ? error.message : 'Error desconocido' },
+  1050→      { status: 500 }
+  1051→    )
+  1052→  }
+  1053→}
+  1054→

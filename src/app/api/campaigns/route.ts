@@ -1,8 +1,9 @@
 // API de Campañas - ImmiScale Meta Engine v5
-// Gestión de campañas publicitarias de Meta Ads
+// Gestión de campañas publicitarias de Meta Ads con sincronización
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getMetaAPI } from '@/lib/meta-api'
 
 // GET - Listar todas las campañas con sus adsets
 export async function GET() {
@@ -32,7 +33,7 @@ export async function GET() {
   }
 }
 
-// POST - Crear una nueva campaña
+// POST - Crear una nueva campaña (localmente y en Meta si está conectada)
 export async function POST(request: NextRequest) {
   try {
     const cuerpo = await request.json()
@@ -45,9 +46,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let metaCampaignId = cuerpo.metaCampaignId || null
+
+    // Crear la campaña en la base de datos local
     const nuevaCampana = await db.campaign.create({
       data: {
-        metaCampaignId: cuerpo.metaCampaignId || null,
+        metaCampaignId,
         name: cuerpo.name,
         objective: cuerpo.objective || 'LEAD_GENERATION',
         status: cuerpo.status || 'ACTIVE',
@@ -65,6 +69,37 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    // Intentar crear la campaña en Meta si la API está conectada
+    // Solo si no se proporcionó ya un metaCampaignId
+    if (!metaCampaignId) {
+      try {
+        const metaAPI = await getMetaAPI()
+        if (metaAPI) {
+          const respuestaMeta = await metaAPI.crearCampana({
+            nombre: cuerpo.name,
+            objetivo: cuerpo.objective || 'LEAD_GENERATION',
+            estado: cuerpo.status || 'PAUSED', // En Meta se crea pausada por seguridad
+            presupuestoTotal: cuerpo.totalBudget || undefined,
+          })
+
+          // Guardar el metaCampaignId devuelto por Meta
+          metaCampaignId = respuestaMeta.id
+
+          await db.campaign.update({
+            where: { id: nuevaCampana.id },
+            data: { metaCampaignId },
+          })
+
+          // Actualizar el objeto de respuesta con el metaCampaignId
+          nuevaCampana.metaCampaignId = metaCampaignId
+        }
+      } catch (errorMeta) {
+        // Error al crear en Meta: mantener registro local, registrar error
+        console.error('Error al crear campaña en Meta:', errorMeta)
+        // No revirtir la creación local, solo loguear
+      }
+    }
 
     return NextResponse.json(
       { exito: true, datos: nuevaCampana },

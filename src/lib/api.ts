@@ -320,3 +320,89 @@ export async function sendCAPIEvent(data: {
     body: JSON.stringify(data),
   })
 }
+
+// =============================================
+// TIPOS META / FACEBOOK
+// =============================================
+export interface MetaCredential {
+  id: string
+  appId: string
+  appSecret: string
+  accessToken: string
+  tokenExpiresAt: string | null
+  refreshToken: string | null
+  accountId: string | null
+  pixelId: string | null
+  businessId: string | null
+  graphApiVersion: string
+  scope: string | null
+  isConnected: boolean
+  lastSyncAt: string | null
+  connectionStatus: string
+  errorMessage: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MetaStatus {
+  connected: boolean
+  accountId?: string
+  businessId?: string
+  pixelId?: string
+  tokenExpiresAt?: string
+  scopes?: string[]
+  lastSyncAt?: string
+  error?: string
+}
+
+export interface ConnectionTestResult {
+  exito: boolean
+  datos?: {
+    conectado: boolean
+    tokenValido: boolean
+    scopes: string[]
+    error?: string
+  }
+  error?: string
+}
+
+// =============================================
+// FUNCIONES META / FACEBOOK
+// =============================================
+export async function fetchMetaStatus(): Promise<MetaStatus> {
+  return apiFetch<MetaStatus>('/api/meta/status')
+}
+
+export async function saveMetaCredentials(data: {
+  appId: string
+  appSecret: string
+  accessToken: string
+  accountId?: string
+  pixelId?: string
+  businessId?: string
+  graphApiVersion?: string
+}): Promise<MetaCredential> {
+  return apiFetch<MetaCredential>('/api/meta/auth', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
+export async function disconnectMeta(): Promise<void> {
+  return apiFetch<void>('/api/meta/auth', { method: 'DELETE' })
+}
+
+export async function testMetaConnection(): Promise<ConnectionTestResult> {
+  return apiFetch<ConnectionTestResult>('/api/meta/status', { method: 'POST' })
+}
+
+export async function syncMetaData(type: 'campaigns' | 'insights' | 'all', dateRange?: { from: string; to: string }): Promise<{ synced: number; created: number; updated: number }> {
+  return apiFetch<{ synced: number; created: number; updated: number }>('/api/meta/sync', {
+    method: 'POST',
+    body: JSON.stringify({ type, dateRange }),
+  })
+}
+
+export async function getMetaOAuthUrl(): Promise<{ url: string; redirectUri: string }> {
+  return apiFetch<{ url: string; redirectUri: string }>('/api/meta/auth')
+}

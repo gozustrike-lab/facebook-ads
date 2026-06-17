@@ -1,8 +1,9 @@
 // API de CAPI (Conversions API) - ImmiScale Meta Engine v5
-// Envío y registro de eventos de conversión a Meta
+// Envío y registro de eventos de conversión a Meta con integración real
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getMetaAPI } from '@/lib/meta-api'
 import { v4 as uuidv4 } from 'uuid'
 
 // =============================================
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
 
 // =============================================
 // POST - Crear y enviar un evento CAPI a Meta
+// Intenta usar la API real de Meta; si no está conectada, simula el envío
 // =============================================
 export async function POST(request: NextRequest) {
   try {
@@ -83,54 +85,77 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // =============================================
-    // Simulación de envío a Meta CAPI
-    // En producción, aquí se llamaría al endpoint de Meta:
-    // POST https://graph.facebook.com/v18.0/{pixel_id}/events
-    // =============================================
-    let metaResponse = 'SIMULATED_SUCCESS'
+    let metaResponse = ''
+    let sentToMeta = false
 
+    // =============================================
+    // Intentar envío real a Meta CAPI
+    // =============================================
     try {
-      // Simulación: en producción se haría fetch a Meta
-      // const response = await fetch(`https://graph.facebook.com/v18.0/${PIXEL_ID}/events`, {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     data: [{
-      //       event_name: cuerpo.eventName,
-      //       event_id: eventId,
-      //       event_time: Math.floor(Date.now() / 1000),
-      //       event_source_url: cuerpo.sourceUrl,
-      //       action_source: 'website',
-      //       user_data: {
-      //         client_user_agent: cuerpo.userAgent,
-      //         fbc: cuerpo.fbclid ? `fb.1.${Math.floor(Date.now() / 1000)}.${cuerpo.fbclid}` : undefined,
-      //         fbp: cuerpo.fbp,
-      //       },
-      //     }],
-      //     access_token: ACCESS_TOKEN,
-      //   }),
-      // })
+      const metaAPI = await getMetaAPI()
 
-      // Marcar como enviado exitosamente
-      await db.cAPIEvent.update({
-        where: { id: nuevoEvento.id },
-        data: {
-          sentToMeta: true,
-          metaResponse,
-        },
-      })
+      if (metaAPI) {
+        // Meta está conectada: enviar evento real con hashing SHA-256
+        const respuestaCAPI = await metaAPI.enviarEventoCAPI({
+          eventName: cuerpo.eventName,
+          eventId,
+          eventTime: Math.floor(Date.now() / 1000),
+          sourceUrl: cuerpo.sourceUrl,
+          userAgent: cuerpo.userAgent,
+          fbclid: cuerpo.fbclid,
+          fbp: cuerpo.fbp,
+          country: cuerpo.country,
+          email: cuerpo.email,
+          phone: cuerpo.phone,
+          firstName: cuerpo.firstName,
+          lastName: cuerpo.lastName,
+        })
+
+        // Éxito en el envío real
+        metaResponse = JSON.stringify({
+          tipo: 'META_API_REAL',
+          events_received: respuestaCAPI.events_received,
+          fbtrace_id: respuestaCAPI.fbtrace_id,
+          timestamp: new Date().toISOString(),
+        })
+        sentToMeta = true
+      } else {
+        // Meta NO está conectada: simulación
+        metaResponse = JSON.stringify({
+          tipo: 'SIMULACION',
+          mensaje: 'Meta API no conectada - evento simulado',
+          event_name: cuerpo.eventName,
+          event_id: eventId,
+          event_time: Math.floor(Date.now() / 1000),
+          event_source_url: cuerpo.sourceUrl,
+          action_source: 'website',
+          user_data: {
+            client_user_agent: cuerpo.userAgent || null,
+            fbc: cuerpo.fbclid ? `fb.1.${Math.floor(Date.now() / 1000)}.${cuerpo.fbclid}` : null,
+            fbp: cuerpo.fbp || null,
+          },
+          timestamp: new Date().toISOString(),
+        })
+        sentToMeta = true // Simulación también marca como "enviado"
+      }
     } catch (errorMeta) {
-      // Si falla el envío a Meta, registrar el error
-      metaResponse = `ERROR: ${errorMeta instanceof Error ? errorMeta.message : 'Error desconocido'}`
-      await db.cAPIEvent.update({
-        where: { id: nuevoEvento.id },
-        data: {
-          sentToMeta: false,
-          metaResponse,
-        },
+      // Error al enviar a Meta (API real conectada pero falló)
+      metaResponse = JSON.stringify({
+        tipo: 'ERROR_META_API',
+        error: errorMeta instanceof Error ? errorMeta.message : 'Error desconocido al enviar a Meta',
+        timestamp: new Date().toISOString(),
       })
+      sentToMeta = false
     }
+
+    // Actualizar el registro del evento con la respuesta
+    await db.cAPIEvent.update({
+      where: { id: nuevoEvento.id },
+      data: {
+        sentToMeta,
+        metaResponse,
+      },
+    })
 
     // Obtener el evento actualizado
     const eventoActualizado = await db.cAPIEvent.findUnique({
@@ -141,7 +166,7 @@ export async function POST(request: NextRequest) {
       {
         exito: true,
         datos: eventoActualizado,
-        simulacion: 'Este es un envío simulado. En producción, se enviaría al endpoint de Meta CAPI.',
+        metaConectado: sentToMeta && metaResponse.includes('META_API_REAL'),
       },
       { status: 201 }
     )

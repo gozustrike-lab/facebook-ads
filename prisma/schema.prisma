@@ -206,3 +206,26 @@ model CAPIEvent {
   @@index([country])
   @@index([sentToMeta])
 }
+
+// =============================================
+// CREDENCIALES META / FACEBOOK DEV
+// =============================================
+model MetaCredential {
+  id                String   @id @default(cuid())
+  appId             String              // Facebook App ID
+  appSecret         String              // Facebook App Secret (encriptado en producción)
+  accessToken       String              // Token de acceso de larga duración
+  tokenExpiresAt    DateTime?           // Fecha de expiración del token
+  refreshToken      String?             // Token de refresco
+  accountId         String?             // Ad Account ID (act_xxxxx)
+  pixelId           String?             // Meta Pixel ID
+  businessId        String?             // Business Manager ID
+  graphApiVersion   String   @default("v21.0") // Versión de la Graph API
+  scope             String?             // Permisos otorgados (JSON)
+  isConnected       Boolean  @default(false)    // Estado de la conexión
+  lastSyncAt        DateTime?           // Última sincronización exitosa
+  connectionStatus  String   @default("DISCONNECTED") // DISCONNECTED, CONNECTED, ERROR, EXPIRED
+  errorMessage      String?             // Último mensaje de error
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
