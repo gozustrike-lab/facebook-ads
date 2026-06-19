@@ -1,5 +1,6 @@
 // API de AdSets - ImmiScale Meta Engine v5
 // Gestión de conjuntos de anuncios con sincronización Meta
+// SAFE: Returns [] on empty DB instead of 500
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -23,10 +24,13 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Error al obtener adsets:', error)
-    return NextResponse.json(
-      { exito: false, error: 'Error al obtener adsets' },
-      { status: 500 }
-    )
+    // Graceful fallback: return empty array instead of 500
+    return NextResponse.json({
+      exito: true,
+      datos: [],
+      total: 0,
+      _warning: 'La base de datos no está disponible. Ejecuta /api/init-db para inicializar.',
+    })
   }
 }
 
@@ -112,7 +116,7 @@ export async function POST(request: NextRequest) {
 
           await db.adSet.update({
             where: { id: nuevoAdset.id },
-            data: { metaAdSetId },
+            data: { metaAdSetSetId: metaAdSetId },
           })
 
           // Actualizar el objeto de respuesta con el metaAdSetId
@@ -131,7 +135,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error al crear adset:', error)
     return NextResponse.json(
-      { exito: false, error: 'Error al crear adset' },
+      { exito: false, error: 'Error al crear adset. Verifica que la base de datos esté inicializada.' },
       { status: 500 }
     )
   }

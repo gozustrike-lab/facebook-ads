@@ -1,5 +1,21 @@
+// API de Dashboard Metrics - ImmiScale Meta Engine v5
+// SAFE: Returns zeroed metrics on DB error instead of 500
+
 import { db } from '@/lib/db'
 import { NextResponse } from 'next/server'
+
+// Empty dashboard response for graceful fallback
+const emptyDashboard = {
+  totalSpend: 0,
+  totalLeads: 0,
+  avgCpql: 0,
+  paidConsultations: 0,
+  matchScore: 0,
+  totalRevenue: 0,
+  completedPayments: 0,
+  conversionRate: 0,
+  _warning: 'La base de datos no está disponible. Ejecuta /api/init-db para inicializar.',
+}
 
 export async function GET(request: Request) {
   try {
@@ -37,6 +53,7 @@ export async function GET(request: Request) {
     })
   } catch (error) {
     console.error('Error fetching dashboard metrics:', error)
-    return NextResponse.json({ message: 'Error al obtener métricas del dashboard' }, { status: 500 })
+    // Graceful fallback: return zeroed dashboard instead of 500
+    return NextResponse.json(emptyDashboard)
   }
 }

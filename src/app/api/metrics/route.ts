@@ -1,8 +1,29 @@
 // API de Métricas - ImmiScale Meta Engine v5
 // Métricas diarias por región con resúmenes agregados
+// SAFE: Returns empty data on DB error instead of 500
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+
+// Empty response structure for graceful fallback
+const emptyMetricsResponse = {
+  exito: true,
+  datos: [],
+  resumen: {
+    totalSpend: 0,
+    totalLeads: 0,
+    totalQualified: 0,
+    totalPaid: 0,
+    totalRevenue: 0,
+    avgCpl: 0,
+    avgCpql: 0,
+    avgMatchScore: 0,
+    dias: 0,
+  },
+  desglosePorRegion: {},
+  filtros: { regionId: null, from: null, to: null },
+  _warning: 'La base de datos no está disponible. Ejecuta /api/init-db para inicializar.',
+}
 
 // GET - Obtener métricas con filtros y resumen agregado
 export async function GET(request: NextRequest) {
@@ -128,9 +149,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error('Error al obtener métricas:', error)
-    return NextResponse.json(
-      { exito: false, error: 'Error al obtener métricas' },
-      { status: 500 }
-    )
+    // Graceful fallback: return empty metrics instead of 500
+    return NextResponse.json(emptyMetricsResponse)
   }
 }

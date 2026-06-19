@@ -72,4 +72,4 @@ download/
 worklog.md
 
 # Mini services runtime
-mini-services/*/node_modules
+mini-services/*/node_modulestool-results/
