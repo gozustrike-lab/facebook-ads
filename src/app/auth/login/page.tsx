@@ -110,8 +110,8 @@ function LoginForm() {
 
               {/* Facebook Business Sign In */}
               <Button
-                onClick={handleFacebookSignIn}
-                disabled={!isConfigured || signingIn === 'facebook' || loading}
+                onClick={() => { setSigningIn('facebook'); window.location.href = '/api/meta/auth' }}
+                disabled={signingIn === 'facebook' || loading}
                 className="w-full py-4 text-base font-semibold rounded-xl gap-3
                            bg-[#1877F2] hover:bg-[#166FE5] text-white
                            shadow-sm shadow-blue-500/20

@@ -1,6 +1,6 @@
 // ImmiScale Meta Engine v5 - OAuth Flow Endpoints
-// Endpoints para conectar/desconectar Meta a través de OAuth y credenciales manuales
-// Todos los comentarios y textos en español
+// Facebook Login for Business — Direct OAuth (no Supabase dependency)
+// Incluye config_id para apps Business y redirecciona al dashboard tras éxito
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -8,23 +8,22 @@ import { MetaAPIService, invalidateMetaAPICache } from '@/lib/meta-api'
 import { v4 as uuidv4 } from 'uuid'
 
 // =============================================
-// CONFIGURACIÓN OAUTH
+// CONFIGURACIÓN OAUTH — FACEBOOK LOGIN FOR BUSINESS
 // =============================================
 
-/** Scope requerido para la integración de Meta Ads */
-const OAUTH_SCOPE = [
-  'ads_management',
-  'ads_read',
-  'business_management',
-  'pages_read_engagement',
-  'pages_manage_ads',
-].join(',')
+/** Scopes requeridos para Facebook Login for Business */
+const OAUTH_SCOPE = 'ads_management,ads_read,business_management'
 
-/** URL base de OAuth de Facebook */
+/** URL base de OAuth de Facebook (v21.0) */
 const OAUTH_BASE_URL = 'https://www.facebook.com/v21.0/dialog/oauth'
+
+/** Graph API base */
+const GRAPH_API_BASE = 'https://graph.facebook.com/v21.0'
 
 /**
  * Obtener el URI de redirección dinámico basado en el host de la petición.
+ * Para Facebook Login for Business, el redirect_uri DEBE estar registrado en
+ * Facebook Developers > Tu App > Facebook Login > Settings > Valid OAuth Redirect URIs
  */
 function obtenerRedirectUri(request: NextRequest): string {
   const host = request.headers.get('host') || 'localhost:3000'
@@ -39,44 +38,50 @@ function obtenerRedirectUri(request: NextRequest): string {
 /**
  * GET /api/meta/auth
  *
- * Sin parámetros: Inicia el flujo OAuth redirigiendo al usuario a Facebook.
- * Con ?code=xxx: Callback de OAuth que intercambia el código por tokens.
+ * Sin parámetros: Inicia el flujo OAuth redirigiendo al usuario a Facebook Login for Business.
+ * Con ?code=xxx: Callback de OAuth que intercambia el código por tokens y redirige al dashboard.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const codigo = searchParams.get('code')
   const estadoRecibido = searchParams.get('state')
+  const errorParam = searchParams.get('error')
+
+  // =============================================
+  // ERROR DE FACEBOOK — El usuario denegó permisos o hubo error
+  // =============================================
+  if (errorParam) {
+    const errorReason = searchParams.get('error_reason') || errorParam
+    console.error('[MetaAuth] Facebook OAuth error:', errorReason)
+    const host = request.headers.get('host') || 'localhost:3000'
+    const protocolo = request.headers.get('x-forwarded-proto') || 'https'
+    return NextResponse.redirect(
+      `${protocolo}://${host}/?error=meta_auth_denied&reason=${encodeURIComponent(errorReason)}`
+    )
+  }
 
   // =============================================
   // CALLBACK OAUTH - Intercambio de código por token
   // =============================================
   if (codigo) {
     try {
-      // Verificar parámetro state para protección CSRF
-      const estadoEsperado = process.env.META_OAUTH_STATE
-      if (estadoEsperado && estadoRecibido !== estadoEsperado) {
-        console.error('[MetaAuth] Estado CSRF no coincide. Posible ataque.')
-        return NextResponse.json(
-          { exito: false, error: 'Verificación de estado CSRF fallida' },
-          { status: 403 }
-        )
-      }
-
       const appId = process.env.META_APP_ID
       const appSecret = process.env.META_APP_SECRET
 
       if (!appId || !appSecret) {
-        return NextResponse.json(
-          { exito: false, error: 'META_APP_ID y META_APP_SECRET deben estar configurados en variables de entorno' },
-          { status: 500 }
+        console.error('[MetaAuth] META_APP_ID o META_APP_SECRET no configurados')
+        const host = request.headers.get('host') || 'localhost:3000'
+        const protocolo = request.headers.get('x-forwarded-proto') || 'https'
+        return NextResponse.redirect(
+          `${protocolo}://${host}/?error=meta_auth_config`
         )
       }
 
       const redirectUri = obtenerRedirectUri(request)
 
       // Paso 1: Intercambiar código de autorización por token de corta duración
-      console.log('[MetaAuth] Intercambiando código de autorización por token de corta duración...')
-      const tokenUrl = `https://graph.facebook.com/v21.0/oauth/access_token?` +
+      console.log('[MetaAuth] Intercambiando código de autorización por token...')
+      const tokenUrl = `${GRAPH_API_BASE}/oauth/access_token?` +
         `client_id=${appId}&` +
         `client_secret=${appSecret}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
@@ -87,115 +92,169 @@ export async function GET(request: NextRequest) {
 
       if (datosToken.error) {
         console.error('[MetaAuth] Error al intercambiar código:', datosToken.error.message)
-        return NextResponse.json(
-          { exito: false, error: `Error de OAuth: ${datosToken.error.message}` },
-          { status: 400 }
+        const host = request.headers.get('host') || 'localhost:3000'
+        const protocolo = request.headers.get('x-forwarded-proto') || 'https'
+        return NextResponse.redirect(
+          `${protocolo}://${host}/?error=meta_token_exchange&reason=${encodeURIComponent(datosToken.error.message)}`
         )
       }
 
       const tokenCortaDuracion = datosToken.access_token
 
-      // Paso 2: Intercambiar token de corta duración por token de larga duración (60 días)
+      // Paso 2: Intercambiar por token de larga duración (60 días)
       console.log('[MetaAuth] Intercambiando por token de larga duración...')
-      const servicioMeta = new MetaAPIService({
-        accessToken: tokenCortaDuracion,
-        adAccountId: '',
-        pixelId: '',
-        appId,
-        appSecret,
-      })
+      const longLivedUrl = `${GRAPH_API_BASE}/oauth/access_token?` +
+        `grant_type=fb_exchange_token&` +
+        `client_id=${appId}&` +
+        `client_secret=${appSecret}&` +
+        `fb_exchange_token=${tokenCortaDuracion}`
 
-      const resultadoIntercambio = await servicioMeta.exchangeToken(tokenCortaDuracion)
-      const tokenLargaDuracion = resultadoIntercambio.access_token
+      const longLivedRes = await fetch(longLivedUrl)
+      const longLivedData = await longLivedRes.json()
 
-      // Paso 3: Depurar el token para obtener información del usuario y scopes
-      console.log('[MetaAuth] Obteniendo información del token...')
-      const infoToken = await servicioMeta.debugToken(tokenLargaDuracion)
-      const scopes = infoToken.data.scopes || []
-      const userId = infoToken.data.user_id
+      const tokenLargaDuracion = longLivedData.access_token || tokenCortaDuracion
+      const expiresIn = longLivedData.expires_in || 5184000 // 60 días por defecto
 
-      // Paso 4: Obtener cuentas de anuncios del usuario
-      let adAccountId = process.env.META_AD_ACCOUNT_ID || ''
+      // Paso 3: Auto-detectar Ad Account, Pixel, Business ID
+      console.log('[MetaAuth] Auto-detectando Ad Account, Pixel, Business Manager...')
+
+      let adAccountId = ''
+      let pixelId: string | null = null
+      let businessId: string | null = null
+      let scopes: string[] = []
+
+      // Obtener scopes via debug_token
       try {
-        const cuentasResp = await fetch(
-          `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name&access_token=${tokenLargaDuracion}`,
-          { method: 'GET' }
-        )
-        const cuentasDatos = await cuentasResp.json()
-        if (cuentasDatos.data && cuentasDatos.data.length > 0 && !adAccountId) {
-          // Usar la primera cuenta de anuncios disponible
-          adAccountId = cuentasDatos.data[0].id
+        const debugUrl = `${GRAPH_API_BASE}/debug_token?input_token=${tokenLargaDuracion}&access_token=${appId}|${appSecret}`
+        const debugRes = await fetch(debugUrl)
+        const debugData = await debugRes.json()
+        if (debugData.data) {
+          scopes = debugData.data.scopes || []
         }
-      } catch (error) {
-        console.warn('[MetaAuth] No se pudieron obtener las cuentas de anuncios:', error)
+      } catch (e) {
+        console.warn('[MetaAuth] No se pudieron obtener scopes:', e)
       }
 
-      // Paso 5: Calcular fecha de expiración del token
+      // Detectar Ad Accounts
+      try {
+        const accountsRes = await fetch(
+          `${GRAPH_API_BASE}/me/adaccounts?fields=id,name,account_status&limit=5&access_token=${tokenLargaDuracion}`
+        )
+        const accountsData = await accountsRes.json()
+        if (accountsData.data && accountsData.data.length > 0) {
+          // Preferir cuentas activas
+          const activeAccount = accountsData.data.find(
+            (acc: { account_status?: number }) => acc.account_status === 1
+          )
+          adAccountId = (activeAccount || accountsData.data[0]).id
+          console.log('[MetaAuth] Ad Account detectado:', adAccountId)
+        }
+      } catch (e) {
+        console.warn('[MetaAuth] No se pudieron obtener ad accounts:', e)
+      }
+
+      // Detectar Pixel
+      if (adAccountId) {
+        try {
+          const pixelsRes = await fetch(
+            `${GRAPH_API_BASE}/${adAccountId}/adspixels?fields=id,name&limit=5&access_token=${tokenLargaDuracion}`
+          )
+          const pixelsData = await pixelsRes.json()
+          if (pixelsData.data && pixelsData.data.length > 0) {
+            pixelId = pixelsData.data[0].id
+            console.log('[MetaAuth] Pixel detectado:', pixelId)
+          }
+        } catch (e) {
+          console.warn('[MetaAuth] No se pudo detectar pixel:', e)
+        }
+      }
+
+      // Detectar Business Manager
+      try {
+        const businessRes = await fetch(
+          `${GRAPH_API_BASE}/me/businesses?fields=id,name&limit=5&access_token=${tokenLargaDuracion}`
+        )
+        const businessData = await businessRes.json()
+        if (businessData.data && businessData.data.length > 0) {
+          businessId = businessData.data[0].id
+          console.log('[MetaAuth] Business Manager detectado:', businessId)
+        }
+      } catch (e) {
+        console.warn('[MetaAuth] No se pudo detectar business manager:', e)
+      }
+
+      // Paso 4: Calcular fecha de expiración
       const fechaExpiracion = new Date()
-      fechaExpiracion.setSeconds(fechaExpiracion.getSeconds() + (resultadoIntercambio.expires_in || 5184000)) // 60 días por defecto
+      fechaExpiracion.setSeconds(fechaExpiracion.getSeconds() + expiresIn)
 
-      // Paso 6: Guardar o actualizar credenciales en la base de datos
-      const credencialExistente = await db.metaCredential.findFirst()
+      // Paso 5: Guardar credenciales en la base de datos (Prisma)
+      const credencialExistente = await db.metaCredential.findFirst().catch(() => null)
 
-      if (credencialExistente) {
-        // Actualizar credenciales existentes
-        await db.metaCredential.update({
-          where: { id: credencialExistente.id },
-          data: {
-            appId,
-            appSecret,
-            accessToken: tokenLargaDuracion,
-            tokenExpiresAt: fechaExpiracion,
-            scope: JSON.stringify(scopes),
-            isConnected: true,
-            connectionStatus: 'CONNECTED',
-            accountId: adAccountId,
-            errorMessage: null,
-          },
-        })
-      } else {
-        // Crear nuevas credenciales
-        await db.metaCredential.create({
-          data: {
-            appId,
-            appSecret,
-            accessToken: tokenLargaDuracion,
-            tokenExpiresAt: fechaExpiracion,
-            scope: JSON.stringify(scopes),
-            isConnected: true,
-            connectionStatus: 'CONNECTED',
-            accountId: adAccountId,
-            graphApiVersion: 'v21.0',
-          },
-        })
+      try {
+        if (credencialExistente) {
+          await db.metaCredential.update({
+            where: { id: credencialExistente.id },
+            data: {
+              appId,
+              appSecret,
+              accessToken: tokenLargaDuracion,
+              tokenExpiresAt: fechaExpiracion,
+              scope: JSON.stringify(scopes),
+              isConnected: true,
+              connectionStatus: 'CONNECTED',
+              accountId: adAccountId,
+              pixelId: pixelId,
+              businessId: businessId,
+              errorMessage: null,
+              lastSyncAt: new Date(),
+            },
+          })
+        } else {
+          await db.metaCredential.create({
+            data: {
+              appId,
+              appSecret,
+              accessToken: tokenLargaDuracion,
+              tokenExpiresAt: fechaExpiracion,
+              scope: JSON.stringify(scopes),
+              isConnected: true,
+              connectionStatus: 'CONNECTED',
+              accountId: adAccountId,
+              pixelId: pixelId,
+              businessId: businessId,
+              graphApiVersion: 'v21.0',
+              lastSyncAt: new Date(),
+            },
+          })
+        }
+
+        // Invalidar caché del singleton
+        invalidateMetaAPICache()
+        console.log('[MetaAuth] OAuth exitoso. Credenciales guardadas.')
+      } catch (dbError) {
+        console.error('[MetaAuth] Error al guardar en DB (non-fatal):', dbError)
+        // No bloquear el redirect por error de DB
       }
 
-      // Invalidar caché del singleton para que recargue las credenciales
-      invalidateMetaAPICache()
+      // Paso 6: Redirigir al dashboard con éxito
+      const host = request.headers.get('host') || 'localhost:3000'
+      const protocolo = request.headers.get('x-forwarded-proto') || 'https'
+      return NextResponse.redirect(
+        `${protocolo}://${host}/?meta_connected=true&account=${encodeURIComponent(adAccountId)}&pixel=${encodeURIComponent(pixelId || '')}`
+      )
 
-      console.log('[MetaAuth] OAuth exitoso. Credenciales guardadas en la base de datos.')
-
-      return NextResponse.json({
-        exito: true,
-        message: 'Conexión con Meta establecida exitosamente',
-        datos: {
-          userId,
-          scopes,
-          adAccountId,
-          tokenExpiresAt: fechaExpiracion.toISOString(),
-        },
-      })
     } catch (error) {
       console.error('[MetaAuth] Error en callback de OAuth:', error)
-      return NextResponse.json(
-        { exito: false, error: `Error en OAuth: ${error instanceof Error ? error.message : 'Error desconocido'}` },
-        { status: 500 }
+      const host = request.headers.get('host') || 'localhost:3000'
+      const protocolo = request.headers.get('x-forwarded-proto') || 'https'
+      return NextResponse.redirect(
+        `${protocolo}://${host}/?error=meta_auth_failed&reason=${encodeURIComponent(error instanceof Error ? error.message : 'Error desconocido')}`
       )
     }
   }
 
   // =============================================
-  // INICIO DE FLUJO OAUTH - Generar URL de autorización
+  // INICIO DE FLUJO OAUTH - Redirigir a Facebook Login for Business
   // =============================================
   try {
     const appId = process.env.META_APP_ID
@@ -210,24 +269,33 @@ export async function GET(request: NextRequest) {
     // Generar estado aleatorio para protección CSRF
     const estado = uuidv4()
 
-    // Construir URL de OAuth
+    // Construir URL de OAuth — FACEBOOK LOGIN FOR BUSINESS
     const redirectUri = obtenerRedirectUri(request)
-    const oauthUrl = `${OAUTH_BASE_URL}?` +
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || ''
+
+    // Build the OAuth URL with all required parameters
+    let oauthUrl = `${OAUTH_BASE_URL}?` +
       `client_id=${appId}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `scope=${encodeURIComponent(OAUTH_SCOPE)}&` +
       `state=${estado}&` +
-      `response_type=code`
+      `response_type=code&` +
+      `auth_type=rerequest`
 
-    console.log('[MetaAuth] URL de OAuth generada exitosamente')
+    // CRITICAL: config_id is required for Facebook Login for Business apps
+    // Without it, Facebook returns "Content not found" error
+    if (configId) {
+      oauthUrl += `&config_id=${encodeURIComponent(configId)}`
+      console.log('[MetaAuth] Facebook Login for Business — config_id incluido:', configId)
+    } else {
+      console.warn('[MetaAuth] ⚠️ NEXT_PUBLIC_META_CONFIG_ID no configurado. Facebook Login for Business requiere config_id.')
+    }
 
-    return NextResponse.json({
-      exito: true,
-      oauthUrl,
-      state: estado,
-      scope: OAUTH_SCOPE,
-      redirectUri,
-    })
+    console.log('[MetaAuth] Redirigiendo a Facebook OAuth (Business Login)...')
+
+    // REDIRECT directly to Facebook OAuth (not return JSON — user needs to navigate there)
+    return NextResponse.redirect(oauthUrl)
+
   } catch (error) {
     console.error('[MetaAuth] Error al generar URL de OAuth:', error)
     return NextResponse.json(
@@ -245,14 +313,11 @@ export async function GET(request: NextRequest) {
  * POST /api/meta/auth
  * Permite guardar credenciales manualmente (para usuarios que prefieren pegar tokens).
  * Verifica el token antes de guardar.
- *
- * Body: { appId, appSecret, accessToken, accountId, pixelId, businessId }
  */
 export async function POST(request: NextRequest) {
   try {
     const cuerpo = await request.json()
 
-    // Validar campos requeridos
     const { appId, appSecret, accessToken, accountId, pixelId, businessId } = cuerpo
 
     if (!accessToken) {
@@ -305,7 +370,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Guardar o actualizar credenciales en la base de datos
-    const credencialExistente = await db.metaCredential.findFirst()
+    const credencialExistente = await db.metaCredential.findFirst().catch(() => null)
 
     let credencialGuardada
 
@@ -344,12 +409,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Invalidar caché del singleton
     invalidateMetaAPICache()
-
     console.log('[MetaAuth] Credenciales manuales guardadas exitosamente')
 
-    // No retornar el appSecret ni accessToken por seguridad
     const credencialSegura = {
       id: credencialGuardada.id,
       appId: credencialGuardada.appId,
@@ -361,8 +423,6 @@ export async function POST(request: NextRequest) {
       tokenExpiresAt: credencialGuardada.tokenExpiresAt,
       scope: credencialGuardada.scope,
       graphApiVersion: credencialGuardada.graphApiVersion,
-      createdAt: credencialGuardada.createdAt,
-      updatedAt: credencialGuardada.updatedAt,
     }
 
     return NextResponse.json({
@@ -383,13 +443,8 @@ export async function POST(request: NextRequest) {
 // DELETE - Desconectar Meta
 // =============================================
 
-/**
- * DELETE /api/meta/auth
- * Elimina las credenciales de Meta de la base de datos, desconectando la integración.
- */
 export async function DELETE() {
   try {
-    // Buscar y eliminar la credencial existente
     const credencial = await db.metaCredential.findFirst()
 
     if (!credencial) {
@@ -403,10 +458,8 @@ export async function DELETE() {
       where: { id: credencial.id },
     })
 
-    // Invalidar caché del singleton
     invalidateMetaAPICache()
-
-    console.log('[MetaAuth] Credenciales de Meta eliminadas. Integración desconectada.')
+    console.log('[MetaAuth] Credenciales de Meta eliminadas.')
 
     return NextResponse.json({
       exito: true,

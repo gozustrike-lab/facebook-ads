@@ -1,9 +1,9 @@
 'use client'
 
 // ImmiScale Meta Engine v5 — MetaConnection Rediseñado
-// Friction-Zero: 1 botón OAuth, 0 campos manuales
+// Friction-Zero: 1 botón OAuth directo a Facebook Login for Business
 // Mobile-First: Tarjeta minimalista con indicador de estado visual
-// SAFE: Works with or without Supabase configured
+// NO depende de Supabase — Usa /api/meta/auth directamente
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchMetaStatus, disconnectMeta, syncMetaData, testMetaConnection } from '@/lib/api'
@@ -23,42 +23,17 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useSupabaseAuth } from '@/hooks/use-supabase-auth'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 export function MetaConnection() {
   const queryClient = useQueryClient()
-  const { signInWithFacebook, isConfigured: supabaseConfigured } = useSupabaseAuth()
 
   // Query para obtener estado de conexión
   const { data: metaStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['meta-status'],
     queryFn: fetchMetaStatus,
     refetchInterval: 30000,
-  })
-
-  // Mutation para conectar via /api/meta/connect (backend endpoint)
-  const connectMutation = useMutation({
-    mutationFn: async (token: string) => {
-      const res = await fetch('/api/meta/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ meta_token: token }),
-      })
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: 'Error al conectar' }))
-        throw new Error(error.error || 'Error al conectar con Meta')
-      }
-      return res.json()
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['meta-status'] })
-      toast.success('Cuenta de Meta configurada automáticamente')
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Error al conectar con Meta')
-    },
   })
 
   // Mutation para desconectar
@@ -110,15 +85,44 @@ export function MetaConnection() {
 
   const status = statusConfig
 
-  // Handler for the 1-click OAuth button
+  // =============================================
+  // HANDLER: 1-Click OAuth via /api/meta/auth
+  // Direct Facebook Login for Business — NO Supabase dependency
+  // =============================================
   const handleConnect = async () => {
-    if (supabaseConfigured) {
-      // Facebook Login for Business flow — auto-detects Ad Account, Pixel, Business ID
-      await signInWithFacebook()
-    } else {
-      // Fallback: Show info about Supabase setup needed
-      toast.info('Para vincular con 1 clic, configura Supabase en tu proyecto. Ve a Ajustes → Configuración Avanzada.')
-    }
+    // Direct redirect to our OAuth endpoint which will redirect to Facebook
+    // with the correct config_id for Facebook Login for Business
+    toast.info('Redirigiendo a Facebook Login for Business...')
+    window.location.href = '/api/meta/auth'
+  }
+
+  // Detect success from OAuth callback redirect
+  const urlParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const metaConnected = urlParams?.get('meta_connected')
+  const metaError = urlParams?.get('error')
+
+  // Show toast on OAuth return
+  if (metaConnected === 'true') {
+    // Clean URL and show success
+    setTimeout(() => {
+      toast.success('Cuenta de Meta conectada exitosamente')
+      queryClient.invalidateQueries({ queryKey: ['meta-status'] })
+      window.history.replaceState({}, '', '/')
+    }, 100)
+  } else if (metaError?.startsWith('meta_')) {
+    setTimeout(() => {
+      const reason = urlParams?.get('reason') || ''
+      if (metaError === 'meta_auth_denied') {
+        toast.error('Permiso denegado. Debes autorizar los permisos de Meta para continuar.')
+      } else if (metaError === 'meta_auth_config') {
+        toast.error('Error de configuración. Verifica META_APP_ID y META_APP_SECRET en Vercel.')
+      } else if (metaError === 'meta_token_exchange') {
+        toast.error(`Error al obtener token de Meta: ${reason}`)
+      } else {
+        toast.error(`Error de autenticación con Meta: ${reason || metaError}`)
+      }
+      window.history.replaceState({}, '', '/')
+    }, 100)
   }
 
   return (
@@ -189,7 +193,7 @@ export function MetaConnection() {
       </motion.div>
 
       {/* ============================================= */}
-      {/* BOTÓN PRINCIPAL — 1 Clic OAuth o Reconectar */}
+      {/* BOTÓN PRINCIPAL — 1 Clic Facebook Login for Business */}
       {/* ============================================= */}
       <AnimatePresence mode="wait">
         {!isConnected ? (
@@ -209,21 +213,21 @@ export function MetaConnection() {
                          gap-3"
             >
               <Facebook className="h-6 w-6" />
-              Vincular mi cuenta de Meta con 1 Clic
+              Vincular Meta Business con 1 Clic
               <Zap className="h-5 w-5 ml-1" />
             </Button>
             <p className="text-xs text-muted-foreground text-center leading-relaxed px-2">
-              Sin copiar ni pegar nada. Autoriza con Facebook y nosotros
-              configuramos tu Ad Account, Pixel y Business Manager automáticamente.
+              Autoriza con Facebook Business y configuramos tu Ad Account,
+              Pixel y Business Manager automáticamente. Sin copiar ni pegar nada.
             </p>
 
-            {/* Supabase not configured warning */}
-            {!supabaseConfigured && (
+            {/* Config warning */}
+            {!process.env.NEXT_PUBLIC_META_APP_ID && (
               <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-700 dark:text-amber-300">
-                  <p className="font-semibold">OAuth requiere Supabase</p>
-                  <p className="mt-0.5">Configura <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code> y <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> en Vercel para habilitar la conexión con 1 clic.</p>
+                  <p className="font-semibold">Configuración requerida</p>
+                  <p className="mt-0.5">Configura <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_ID</code>, <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_SECRET</code> y <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_META_CONFIG_ID</code> en Vercel.</p>
                 </div>
               </div>
             )}
