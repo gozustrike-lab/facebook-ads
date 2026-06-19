@@ -113,7 +113,7 @@ export function MetaConnection() {
   // Handler for the 1-click OAuth button
   const handleConnect = async () => {
     if (supabaseConfigured) {
-      // Primary flow: Supabase OAuth (auto-detect everything)
+      // Facebook Login for Business flow — auto-detects Ad Account, Pixel, Business ID
       await signInWithFacebook()
     } else {
       // Fallback: Show info about Supabase setup needed
@@ -284,14 +284,17 @@ export function MetaConnection() {
         )}
       </AnimatePresence>
 
-      {/* Permissions info — subtle, no friction */}
+      {/* Permissions info — Business Login scopes */}
       {!isConnected && (
         <div className="flex flex-wrap gap-1.5 justify-center">
           {['ads_management', 'ads_read', 'business_management'].map((scope) => (
-            <Badge key={scope} variant="secondary" className="text-[10px]">
+            <Badge key={scope} variant="secondary" className="text-[10px] font-mono">
               {scope}
             </Badge>
           ))}
+          <Badge variant="outline" className="text-[10px] text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800">
+            Business Login
+          </Badge>
         </div>
       )}
     </div>

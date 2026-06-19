@@ -108,7 +108,7 @@ function LoginForm() {
                 Continuar con Google
               </Button>
 
-              {/* Facebook Sign In */}
+              {/* Facebook Business Sign In */}
               <Button
                 onClick={handleFacebookSignIn}
                 disabled={!isConfigured || signingIn === 'facebook' || loading}
@@ -122,7 +122,7 @@ function LoginForm() {
                 ) : (
                   <Facebook className="h-5 w-5" />
                 )}
-                Continuar con Facebook
+                Continuar con Meta Business
               </Button>
             </div>
 

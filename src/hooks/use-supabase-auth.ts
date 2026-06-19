@@ -60,11 +60,27 @@ export function useSupabaseAuth(): AuthState & {
       console.warn('Supabase no está configurado. Configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY.')
       return
     }
+
+    // Facebook Login for Business — requires config_id parameter
+    // Without config_id, Meta returns "Content not found" for Business apps
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID || ''
+
+    const oAuthOptions: Record<string, string> = {
+      auth_type: 'rerequest', // Force re-authorization to ensure business permissions
+    }
+
+    // If config_id is set, Facebook will use Business Login flow
+    if (configId) {
+      oAuthOptions.config_id = configId
+    }
+
     await supabase.auth.signInWithOAuth({
       provider: 'facebook',
       options: {
-        scopes: 'ads_management ads_read business_management pages_read_engagement',
+        // Comma-separated scopes for Facebook Login for Business
+        scopes: 'ads_management,ads_read,business_management',
         redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: oAuthOptions,
       },
     })
   }, [])
