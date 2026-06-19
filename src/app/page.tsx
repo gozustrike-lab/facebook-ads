@@ -140,7 +140,7 @@ export default function Dashboard() {
   const TabComponent = TAB_COMPONENTS[activeTab]
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background max-w-[100vw]">
       {/* Sidebar - hidden on mobile, visible on desktop */}
       <Sidebar />
 
@@ -237,7 +237,7 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         <main className={cn(
-          'flex-1 overflow-y-auto custom-scrollbar',
+          'flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar',
           isMobile ? 'pb-20 p-3' : 'p-4 sm:p-6'
         )}>
           <AnimatePresence mode="wait">
@@ -265,8 +265,8 @@ export default function Dashboard() {
 
       {/* Bottom Tab Bar - mobile only */}
       {isMobile && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border">
-          <nav className="flex justify-around items-center h-14 px-1">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-md border-t border-border safe-bottom">
+          <nav className="flex justify-around items-center h-14 px-1 max-w-[100vw] overflow-x-hidden">
             {NAV_ITEMS.map((item) => {
               const isActive = activeTab === item.id
               const Icon = item.icon

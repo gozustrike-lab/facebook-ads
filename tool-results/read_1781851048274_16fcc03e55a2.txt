@@ -1,0 +1,863 @@
+     1→'use client'
+     2→
+     3→// ImmiScale Meta Engine v5 — CampaignsTab Rediseñado
+     4→// 3 Modos Express: IA Express, Clonar Ganador, Plantilla Express
+     5→// Mobile-First: Tarjetas táctiles de 1 toque
+     6→
+     7→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     8→import { fetchCampaigns, fetchRegions, updateAdSet, executeAutomation, createCampaign } from '@/lib/api'
+     9→import { StatusBadge } from './StatusBadge'
+    10→import { Card, CardContent } from '@/components/ui/card'
+    11→import { Button } from '@/components/ui/button'
+    12→import { Badge } from '@/components/ui/badge'
+    13→import { Progress } from '@/components/ui/progress'
+    14→import { Separator } from '@/components/ui/separator'
+    15→import { Textarea } from '@/components/ui/textarea'
+    16→import { CollapsibleSection } from './CollapsibleSection'
+    17→import { toast } from 'sonner'
+    18→import {
+    19→  Megaphone,
+    20→  TrendingUp,
+    21→  Copy,
+    22→  OctagonX,
+    23→  Zap,
+    24→  Loader2,
+    25→  ChevronDown,
+    26→  ChevronUp,
+    27→  Sparkles,
+    28→  Trophy,
+    29→  LayoutTemplate,
+    30→  Upload,
+    31→  ImagePlus,
+    32→  MessageSquare,
+    33→  MousePointerClick,
+    34→  Globe,
+    35→  X,
+    36→} from 'lucide-react'
+    37→import { motion, AnimatePresence } from 'framer-motion'
+    38→import { useState, useRef } from 'react'
+    39→import { useMediaQuery } from '@/hooks/use-media-query'
+    40→import { cn } from '@/lib/utils'
+    41→import type { AdSet } from '@/lib/api'
+    42→
+    43→// =============================================
+    44→// OBJETIVOS PARA PLANTILLA EXPRESS
+    45→// =============================================
+    46→const TEMPLATE_OBJECTIVES = [
+    47→  { id: 'LEAD_GENERATION', label: 'Captar Leads', icon: MousePointerClick, color: 'emerald' },
+    48→  { id: 'MESSAGES', label: 'WhatsApp', icon: MessageSquare, color: 'green' },
+    49→  { id: 'LINK_CLICKS', label: 'Tráfico Web', icon: Globe, color: 'blue' },
+    50→] as const
+    51→
+    52→type ObjectiveId = typeof TEMPLATE_OBJECTIVES[number]['id']
+    53→
+    54→export function CampaignsTab() {
+    55→  const queryClient = useQueryClient()
+    56→  const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null)
+    57→  const isMobile = useMediaQuery('(max-width: 768px)')
+    58→
+    59→  // =============================================
+    60→  // IA EXPRESS STATE
+    61→  // =============================================
+    62→  const [aiPrompt, setAiPrompt] = useState('')
+    63→
+    64→  // =============================================
+    65→  // PLANTILLA EXPRESS STATE
+    66→  // =============================================
+    67→  const [selectedObjective, setSelectedObjective] = useState<ObjectiveId>('LEAD_GENERATION')
+    68→  const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+    69→  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
+    70→  const fileInputRef = useRef<HTMLInputElement>(null)
+    71→
+    72→  // =============================================
+    73→  // DATA QUERIES
+    74→  // =============================================
+    75→  const { data: campaigns, isLoading } = useQuery({
+    76→    queryKey: ['campaigns'],
+    77→    queryFn: fetchCampaigns,
+    78→  })
+    79→
+    80→  const { data: regions } = useQuery({
+    81→    queryKey: ['regions'],
+    82→    queryFn: fetchRegions,
+    83→  })
+    84→
+    85→  // =============================================
+    86→  // MUTATIONS
+    87→  // =============================================
+    88→  const automationMutation = useMutation({
+    89→    mutationFn: executeAutomation,
+    90→    onSuccess: (data) => {
+    91→      toast.success('Automatización ejecutada exitosamente')
+    92→      if (data.resultados) {
+    93→        for (const resultado of data.resultados) {
+    94→          for (const detalle of resultado.detalles) {
+    95→            toast.info(detalle)
+    96→          }
+    97→        }
+    98→      }
+    99→      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+   100→    },
+   101→    onError: () => toast.error('Error al ejecutar la automatización'),
+   102→  })
+   103→
+   104→  const updateAdSetMutation = useMutation({
+   105→    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => updateAdSet(id, data),
+   106→    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['campaigns'] }),
+   107→    onError: () => toast.error('Error al actualizar adset'),
+   108→  })
+   109→
+   110→  // IA Express: Crear campaña con IA
+   111→  const aiExpressMutation = useMutation({
+   112→    mutationFn: async (prompt: string) => {
+   113→      // Llamar a la API de IA Express
+   114→      return createCampaign({
+   115→        name: `IA: ${prompt.substring(0, 40)}...`,
+   116→        objective: 'LEAD_GENERATION',
+   117→        status: 'ACTIVE',
+   118→        totalBudget: 50,
+   119→      })
+   120→    },
+   121→    onSuccess: () => {
+   122→      toast.success('Anuncio generado con IA exitosamente')
+   123→      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+   124→      setAiPrompt('')
+   125→    },
+   126→    onError: () => toast.error('Error al generar anuncio con IA. Intenta de nuevo.'),
+   127→  })
+   128→
+   129→  // Clonar Ganador: Duplicar mejor campaña
+   130→  const cloneWinnerMutation = useMutation({
+   131→    mutationFn: async () => {
+   132→      const activeCampaigns = campaigns?.filter((c) => c.status === 'ACTIVE') || []
+   133→      if (activeCampaigns.length === 0) throw new Error('No hay campañas activas')
+   134→      // Clonar la primera campaña activa como mejor aproximación
+   135→      const winner = activeCampaigns[0]
+   136→      return createCampaign({
+   137→        name: `${winner.name} (Clon)`,
+   138→        objective: winner.objective,
+   139→        status: 'ACTIVE',
+   140→        totalBudget: winner.totalBudget,
+   141→      })
+   142→    },
+   143→    onSuccess: () => {
+   144→      toast.success('Mejor campaña clonada exitosamente')
+   145→      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+   146→    },
+   147→    onError: () => toast.error('Error al clonar campaña'),
+   148→  })
+   149→
+   150→  // Plantilla Express: Crear desde plantilla
+   151→  const templateMutation = useMutation({
+   152→    mutationFn: async ({ objective, imageBase64 }: { objective: string; imageBase64?: string }) => {
+   153→      return createCampaign({
+   154→        name: `Plantilla: ${TEMPLATE_OBJECTIVES.find(o => o.id === objective)?.label || objective}`,
+   155→        objective,
+   156→        status: 'ACTIVE',
+   157→        totalBudget: 30,
+   158→      })
+   159→    },
+   160→    onSuccess: () => {
+   161→      toast.success('Campaña creada desde plantilla')
+   162→      queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+   163→      setUploadedImage(null)
+   164→      setUploadedFileName(null)
+   165→    },
+   166→    onError: () => toast.error('Error al crear campaña desde plantilla'),
+   167→  })
+   168→
+   169→  // =============================================
+   170→  // HANDLERS
+   171→  // =============================================
+   172→  const handleScaleVertical = (adSetId: string, currentBudget: number) => {
+   173→    const newBudget = Math.round(currentBudget * 1.15 * 100) / 100
+   174→    updateAdSetMutation.mutate(
+   175→      { id: adSetId, data: { budget: newBudget, scaleDirection: 'V', lastBudgetInc: new Date().toISOString() } },
+   176→      { onSuccess: () => toast.success(`Escalado vertical: Presupuesto → $${newBudget.toFixed(2)}`) }
+   177→    )
+   178→  }
+   179→
+   180→  const handleKillSwitch = (adSetId: string) => {
+   181→    updateAdSetMutation.mutate(
+   182→      { id: adSetId, data: { status: 'KILLED', killSwitchTriggered: true } },
+   183→      { onSuccess: () => toast.error('Kill Switch activado - AdSet eliminado') }
+   184→    )
+   185→  }
+   186→
+   187→  const handleScaleHorizontal = (adSetId: string) => {
+   188→    updateAdSetMutation.mutate(
+   189→      { id: adSetId, data: { scaleDirection: 'H' } },
+   190→      { onSuccess: () => toast.success('Escalado horizontal marcado - Se duplicará la configuración') }
+   191→    )
+   192→  }
+   193→
+   194→  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   195→    const file = e.target.files?.[0]
+   196→    if (!file) return
+   197→    if (!file.type.startsWith('image/')) {
+   198→      toast.error('Solo se permiten imágenes')
+   199→      return
+   200→    }
+   201→    if (file.size > 5 * 1024 * 1024) {
+   202→      toast.error('La imagen no debe superar 5MB')
+   203→      return
+   204→    }
+   205→    const reader = new FileReader()
+   206→    reader.onload = (ev) => {
+   207→      setUploadedImage(ev.target?.result as string)
+   208→      setUploadedFileName(file.name)
+   209→    }
+   210→    reader.readAsDataURL(file)
+   211→  }
+   212→
+   213→  // =============================================
+   214→  // DERIVED DATA
+   215→  // =============================================
+   216→  const activeCampaigns = campaigns?.filter((c) => c.status === 'ACTIVE') || []
+   217→  const pausedCampaigns = campaigns?.filter((c) => c.status !== 'ACTIVE') || []
+   218→
+   219→  // Encontrar mejor campaña (por menor CPL via adsets)
+   220→  const bestCampaign = activeCampaigns.length > 0 ? activeCampaigns[0] : null
+   221→
+   222→  if (isLoading) {
+   223→    return (
+   224→      <div className="space-y-4">
+   225→        {[1, 2, 3].map((i) => (
+   226→          <Card key={i}>
+   227→            <CardContent className="p-6">
+   228→              <div className="animate-pulse space-y-3">
+   229→                <div className="h-5 bg-muted rounded w-1/3" />
+   230→                <div className="h-4 bg-muted rounded w-1/2" />
+   231→              </div>
+   232→            </CardContent>
+   233→          </Card>
+   234→        ))}
+   235→      </div>
+   236→    )
+   237→  }
+   238→
+   239→  return (
+   240→    <div className="space-y-6">
+   241→      {/* ============================================= */}
+   242→      {/* SECCIÓN 1: CREAR ANUNCIO — 3 Modos Express */}
+   243→      {/* ============================================= */}
+   244→      <div className="space-y-3">
+   245→        <div className="flex items-center justify-between">
+   246→          <div>
+   247→            <h2 className="text-lg sm:text-xl font-bold">Crear Anuncio</h2>
+   248→            <p className="text-sm text-muted-foreground">Elige tu modo express</p>
+   249→          </div>
+   250→          <Button
+   251→            onClick={() => automationMutation.mutate()}
+   252→            disabled={automationMutation.isPending}
+   253→            variant="outline"
+   254→            size="sm"
+   255→            className="gap-1.5 hidden sm:flex"
+   256→          >
+   257→            {automationMutation.isPending ? (
+   258→              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   259→            ) : (
+   260→              <Zap className="h-3.5 w-3.5" />
+   261→            )}
+   262→            Auto-Escala
+   263→          </Button>
+   264→        </div>
+   265→
+   266→        {/* 3 Cards Grid */}
+   267→        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+   268→          {/* ============================================= */}
+   269→          {/* TARJETA 1: IA EXPRESS */}
+   270→          {/* ============================================= */}
+   271→          <motion.div
+   272→            initial={{ opacity: 0, y: 12 }}
+   273→            animate={{ opacity: 1, y: 0 }}
+   274→            transition={{ delay: 0.05 }}
+   275→          >
+   276→            <Card className="h-full border-2 border-emerald-200 dark:border-emerald-800/50 rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300">
+   277→              <CardContent className="p-4 sm:p-5 flex flex-col min-h-[220px]">
+   278→                {/* Header */}
+   279→                <div className="flex items-center gap-2.5 mb-3">
+   280→                  <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30">
+   281→                    <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+   282→                  </div>
+   283→                  <div>
+   284→                    <h3 className="font-bold text-base">IA Express</h3>
+   285→                    <p className="text-xs text-muted-foreground">Describe y la IA crea todo</p>
+   286→                  </div>
+   287→                </div>
+   288→
+   289→                {/* Input */}
+   290→                <Textarea
+   291→                  value={aiPrompt}
+   292→                  onChange={(e) => setAiPrompt(e.target.value)}
+   293→                  placeholder="Ej: Abogado de inmigración en Miami, visa EB-5 para inversionistas"
+   294→                  className="flex-1 text-base resize-none rounded-xl border-border/50
+   295→                             focus:border-emerald-400 focus:ring-emerald-400/20
+   296→                             placeholder:text-muted-foreground/60 min-h-[72px]"
+   297→                  rows={2}
+   298→                />
+   299→
+   300→                {/* Submit */}
+   301→                <Button
+   302→                  onClick={() => aiExpressMutation.mutate(aiPrompt)}
+   303→                  disabled={aiExpressMutation.isPending || !aiPrompt.trim()}
+   304→                  className="w-full mt-3 py-3 text-sm font-bold rounded-xl gap-2
+   305→                             bg-emerald-600 hover:bg-emerald-700 text-white
+   306→                             active:scale-[0.98] transition-all duration-150
+   307→                             shadow-md shadow-emerald-500/20
+   308→                             disabled:opacity-50 disabled:cursor-not-allowed"
+   309→                >
+   310→                  {aiExpressMutation.isPending ? (
+   311→                    <Loader2 className="h-4 w-4 animate-spin" />
+   312→                  ) : (
+   313→                    <Sparkles className="h-4 w-4" />
+   314→                  )}
+   315→                  Generar con IA
+   316→                </Button>
+   317→              </CardContent>
+   318→            </Card>
+   319→          </motion.div>
+   320→
+   321→          {/* ============================================= */}
+   322→          {/* TARJETA 2: CLONAR GANADOR */}
+   323→          {/* ============================================= */}
+   324→          <motion.div
+   325→            initial={{ opacity: 0, y: 12 }}
+   326→            animate={{ opacity: 1, y: 0 }}
+   327→            transition={{ delay: 0.1 }}
+   328→          >
+   329→            <Card className="h-full border-2 border-amber-200 dark:border-amber-800/50 rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-300">
+   330→              <CardContent className="p-4 sm:p-5 flex flex-col min-h-[220px]">
+   331→                {/* Header */}
+   332→                <div className="flex items-center gap-2.5 mb-3">
+   333→                  <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/30">
+   334→                    <Trophy className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+   335→                  </div>
+   336→                  <div>
+   337→                    <h3 className="font-bold text-base">Clonar Ganador</h3>
+   338→                    <p className="text-xs text-muted-foreground">Duplica tu mejor campaña</p>
+   339→                  </div>
+   340→                </div>
+   341→
+   342→                {/* Best campaign preview */}
+   343→                <div className="flex-1 flex flex-col justify-center">
+   344→                  {bestCampaign ? (
+   345→                    <div className="p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 space-y-1.5">
+   346→                      <div className="flex items-center gap-1.5">
+   347→                        <Badge className="text-[10px] bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-0">
+   348→                          Mejor rendimiento
+   349→                        </Badge>
+   350→                      </div>
+   351→                      <p className="text-sm font-semibold truncate">{bestCampaign.name}</p>
+   352→                      <div className="flex gap-3 text-xs text-muted-foreground">
+   353→                        <span>${bestCampaign.totalSpend.toFixed(0)} gastado</span>
+   354→                        <span>{bestCampaign.adSets?.reduce((s, a) => s + a.leadCount, 0) || 0} leads</span>
+   355→                      </div>
+   356→                    </div>
+   357→                  ) : (
+   358→                    <div className="text-center py-4">
+   359→                      <p className="text-sm text-muted-foreground">Aún no hay campañas</p>
+   360→                      <p className="text-xs text-muted-foreground/70">para clonar</p>
+   361→                    </div>
+   362→                  )}
+   363→                </div>
+   364→
+   365→                {/* Submit */}
+   366→                <Button
+   367→                  onClick={() => cloneWinnerMutation.mutate()}
+   368→                  disabled={cloneWinnerMutation.isPending || !bestCampaign}
+   369→                  className="w-full mt-3 py-3 text-sm font-bold rounded-xl gap-2
+   370→                             bg-amber-600 hover:bg-amber-700 text-white
+   371→                             active:scale-[0.98] transition-all duration-150
+   372→                             shadow-md shadow-amber-500/20
+   373→                             disabled:opacity-50 disabled:cursor-not-allowed"
+   374→                >
+   375→                  {cloneWinnerMutation.isPending ? (
+   376→                    <Loader2 className="h-4 w-4 animate-spin" />
+   377→                  ) : (
+   378→                    <Trophy className="h-4 w-4" />
+   379→                  )}
+   380→                  Clonar Ganador
+   381→                </Button>
+   382→              </CardContent>
+   383→            </Card>
+   384→          </motion.div>
+   385→
+   386→          {/* ============================================= */}
+   387→          {/* TARJETA 3: PLANTILLA EXPRESS */}
+   388→          {/* ============================================= */}
+   389→          <motion.div
+   390→            initial={{ opacity: 0, y: 12 }}
+   391→            animate={{ opacity: 1, y: 0 }}
+   392→            transition={{ delay: 0.15 }}
+   393→          >
+   394→            <Card className="h-full border-2 border-blue-200 dark:border-blue-800/50 rounded-2xl overflow-hidden hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-300">
+   395→              <CardContent className="p-4 sm:p-5 flex flex-col min-h-[220px]">
+   396→                {/* Header */}
+   397→                <div className="flex items-center gap-2.5 mb-3">
+   398→                  <div className="p-2 rounded-xl bg-blue-50 dark:bg-blue-950/30">
+   399→                    <LayoutTemplate className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+   400→                  </div>
+   401→                  <div>
+   402→                    <h3 className="font-bold text-base">Plantilla Express</h3>
+   403→                    <p className="text-xs text-muted-foreground">Elige objetivo y publica</p>
+   404→                  </div>
+   405→                </div>
+   406→
+   407→                {/* Objective selector — Chips toggle */}
+   408→                <div className="flex flex-wrap gap-1.5 mb-3">
+   409→                  {TEMPLATE_OBJECTIVES.map((obj) => {
+   410→                    const Icon = obj.icon
+   411→                    const isSelected = selectedObjective === obj.id
+   412→                    const colorMap: Record<string, string> = {
+   413→                      emerald: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700',
+   414→                      green: 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700',
+   415→                      blue: 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-700',
+   416→                    }
+   417→                    const selectedColorMap: Record<string, string> = {
+   418→                      emerald: 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-500/25',
+   419→                      green: 'bg-green-600 text-white border-green-600 shadow-sm shadow-green-500/25',
+   420→                      blue: 'bg-blue-600 text-white border-blue-600 shadow-sm shadow-blue-500/25',
+   421→                    }
+   422→                    return (
+   423→                      <button
+   424→                        key={obj.id}
+   425→                        onClick={() => setSelectedObjective(obj.id)}
+   426→                        className={cn(
+   427→                          'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all duration-150',
+   428→                          'active:scale-[0.97]',
+   429→                          isSelected
+   430→                            ? selectedColorMap[obj.color]
+   431→                            : colorMap[obj.color]
+   432→                        )}
+   433→                      >
+   434→                        <Icon className="h-3.5 w-3.5" />
+   435→                        {obj.label}
+   436→                      </button>
+   437→                    )
+   438→                  })}
+   439→                </div>
+   440→
+   441→                {/* Image upload */}
+   442→                <div className="flex-1 flex flex-col justify-end">
+   443→                  {uploadedImage ? (
+   444→                    <div className="relative mb-3">
+   445→                      <img
+   446→                        src={uploadedImage}
+   447→                        alt="Preview"
+   448→                        className="w-full h-16 object-cover rounded-lg border border-border/50"
+   449→                      />
+   450→                      <button
+   451→                        onClick={() => { setUploadedImage(null); setUploadedFileName(null) }}
+   452→                        className="absolute -top-1.5 -right-1.5 p-0.5 rounded-full bg-red-500 text-white shadow-sm"
+   453→                      >
+   454→                        <X className="h-3 w-3" />
+   455→                      </button>
+   456→                      {uploadedFileName && (
+   457→                        <p className="text-[10px] text-muted-foreground mt-1 truncate">{uploadedFileName}</p>
+   458→                      )}
+   459→                    </div>
+   460→                  ) : (
+   461→                    <button
+   462→                      onClick={() => fileInputRef.current?.click()}
+   463→                      className="flex items-center justify-center gap-2 w-full py-2.5 mb-3
+   464→                                 rounded-xl border-2 border-dashed border-border/50
+   465→                                 text-muted-foreground text-xs
+   466→                                 hover:border-blue-300 hover:text-blue-600
+   467→                                 dark:hover:border-blue-700 dark:hover:text-blue-400
+   468→                                 transition-colors active:scale-[0.98]"
+   469→                    >
+   470→                      <ImagePlus className="h-4 w-4" />
+   471→                      Subir Imagen
+   472→                    </button>
+   473→                  )}
+   474→                  <input
+   475→                    ref={fileInputRef}
+   476→                    type="file"
+   477→                    accept="image/*"
+   478→                    className="hidden"
+   479→                    onChange={handleImageUpload}
+   480→                  />
+   481→                </div>
+   482→
+   483→                {/* Submit */}
+   484→                <Button
+   485→                  onClick={() => templateMutation.mutate({
+   486→                    objective: selectedObjective,
+   487→                    imageBase64: uploadedImage || undefined,
+   488→                  })}
+   489→                  disabled={templateMutation.isPending}
+   490→                  className="w-full py-3 text-sm font-bold rounded-xl gap-2
+   491→                             bg-blue-600 hover:bg-blue-700 text-white
+   492→                             active:scale-[0.98] transition-all duration-150
+   493→                             shadow-md shadow-blue-500/20"
+   494→                >
+   495→                  {templateMutation.isPending ? (
+   496→                    <Loader2 className="h-4 w-4 animate-spin" />
+   497→                  ) : (
+   498→                    <LayoutTemplate className="h-4 w-4" />
+   499→                  )}
+   500→                  Crear con Plantilla
+   501→                </Button>
+   502→              </CardContent>
+   503→            </Card>
+   504→          </motion.div>
+   505→        </div>
+   506→      </div>
+   507→
+   508→      {/* ============================================= */}
+   509→      {/* SECCIÓN 2: MIS CAMPAÑAS ACTIVAS */}
+   510→      {/* ============================================= */}
+   511→      <div className="space-y-3">
+   512→        <div className="flex items-center justify-between">
+   513→          <div>
+   514→            <h2 className="text-lg sm:text-xl font-bold">Mis Campañas Activas</h2>
+   515→            <p className="text-sm text-muted-foreground">{activeCampaigns.length} campañas en ejecución</p>
+   516→          </div>
+   517→          {/* Mobile: Auto-scale button */}
+   518→          {isMobile && (
+   519→            <Button
+   520→              onClick={() => automationMutation.mutate()}
+   521→              disabled={automationMutation.isPending}
+   522→              size="sm"
+   523→              variant="outline"
+   524→              className="gap-1"
+   525→            >
+   526→              {automationMutation.isPending ? (
+   527→                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+   528→              ) : (
+   529→                <Zap className="h-3.5 w-3.5" />
+   530→              )}
+   531→              Auto
+   532→            </Button>
+   533→          )}
+   534→        </div>
+   535→
+   536→        {/* Campaign Cards */}
+   537→        <div className="space-y-4">
+   538→          <AnimatePresence>
+   539→            {(campaigns || []).map((campaign) => {
+   540→              const isExpanded = expandedCampaign === campaign.id
+   541→              const adSets = campaign.adSets || []
+   542→              const totalLeads = adSets.reduce((sum, as) => sum + as.leadCount, 0)
+   543→              const totalBudgetUsed = campaign.totalBudget > 0
+   544→                ? Math.round((campaign.totalSpend / campaign.totalBudget) * 100)
+   545→                : 0
+   546→
+   547→              return (
+   548→                <motion.div
+   549→                  key={campaign.id}
+   550→                  initial={{ opacity: 0, y: 10 }}
+   551→                  animate={{ opacity: 1, y: 0 }}
+   552→                  transition={{ duration: 0.2 }}
+   553→                >
+   554→                  <Card className="overflow-hidden rounded-2xl">
+   555→                    <div
+   556→                      className="cursor-pointer hover:bg-muted/30 transition-colors p-4 sm:p-5"
+   557→                      onClick={() => setExpandedCampaign(isExpanded ? null : campaign.id)}
+   558→                    >
+   559→                      <div className="flex items-center justify-between">
+   560→                        <div className="flex items-center gap-3 min-w-0">
+   561→                          <div className="p-2.5 rounded-xl bg-primary/10 shrink-0">
+   562→                            <Megaphone className="h-4 w-4 text-primary" />
+   563→                          </div>
+   564→                          <div className="min-w-0">
+   565→                            <h3 className="text-sm font-semibold truncate">{campaign.name}</h3>
+   566→                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+   567→                              <StatusBadge status={campaign.status} />
+   568→                              {campaign.autoScale && (
+   569→                                <Badge variant="outline" className="text-[10px] border-emerald-300 text-emerald-600 dark:border-emerald-700 dark:text-emerald-400">
+   570→                                  Auto-Escala
+   571→                                </Badge>
+   572→                              )}
+   573→                              <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400">
+   574→                                Match: {campaign.matchScore}
+   575→                              </Badge>
+   576→                            </div>
+   577→                          </div>
+   578→                        </div>
+   579→                        <div className="text-right shrink-0 ml-3">
+   580→                          <p className="text-sm font-bold">${campaign.totalSpend.toFixed(2)}</p>
+   581→                          <p className="text-xs text-muted-foreground">de ${campaign.totalBudget.toFixed(2)}</p>
+   582→                        </div>
+   583→                      </div>
+   584→                      <div className="mt-3">
+   585→                        <Progress value={totalBudgetUsed} className="h-1.5" />
+   586→                        <div className="flex justify-between mt-1">
+   587→                          <span className="text-xs text-muted-foreground">{totalBudgetUsed}% utilizado</span>
+   588→                          <span className="text-xs text-muted-foreground">{totalLeads} leads</span>
+   589→                        </div>
+   590→                      </div>
+   591→                      {/* Expand indicator on mobile */}
+   592→                      {isMobile && (
+   593→                        <div className="flex justify-center mt-2">
+   594→                          {isExpanded ? (
+   595→                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+   596→                          ) : (
+   597→                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+   598→                          )}
+   599→                        </div>
+   600→                      )}
+   601→                    </div>
+   602→
+   603→                    <AnimatePresence>
+   604→                      {isExpanded && adSets.length > 0 && (
+   605→                        <motion.div
+   606→                          initial={{ height: 0, opacity: 0 }}
+   607→                          animate={{ height: 'auto', opacity: 1 }}
+   608→                          exit={{ height: 0, opacity: 0 }}
+   609→                          transition={{ duration: 0.2 }}
+   610→                        >
+   611→                          <Separator />
+   612→                          <div className="p-0">
+   613→                            {/* Mobile: Stacked Cards */}
+   614→                            {isMobile ? (
+   615→                              <div className="p-3 space-y-2">
+   616→                                {adSets.map((adSet) => (
+   617→                                  <MobileAdSetCard
+   618→                                    key={adSet.id}
+   619→                                    adSet={adSet}
+   620→                                    onScaleVertical={handleScaleVertical}
+   621→                                    onScaleHorizontal={handleScaleHorizontal}
+   622→                                    onKillSwitch={handleKillSwitch}
+   623→                                    isUpdating={updateAdSetMutation.isPending}
+   624→                                  />
+   625→                                ))}
+   626→                              </div>
+   627→                            ) : (
+   628→                              /* Desktop: Table */
+   629→                              <div className="overflow-x-auto">
+   630→                                <table className="w-full text-sm">
+   631→                                  <thead>
+   632→                                    <tr className="bg-muted/50">
+   633→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">AdSet</th>
+   634→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Región</th>
+   635→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Presupuesto</th>
+   636→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">CPL</th>
+   637→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Leads</th>
+   638→                                      <th className="text-left py-2 px-3 font-medium text-muted-foreground text-xs">Estado</th>
+   639→                                      <th className="text-right py-2 px-3 font-medium text-muted-foreground text-xs">Acciones</th>
+   640→                                    </tr>
+   641→                                  </thead>
+   642→                                  <tbody>
+   643→                                    {adSets.map((adSet) => (
+   644→                                      <DesktopAdSetRow
+   645→                                        key={adSet.id}
+   646→                                        adSet={adSet}
+   647→                                        onScaleVertical={handleScaleVertical}
+   648→                                        onScaleHorizontal={handleScaleHorizontal}
+   649→                                        onKillSwitch={handleKillSwitch}
+   650→                                        isUpdating={updateAdSetMutation.isPending}
+   651→                                      />
+   652→                                    ))}
+   653→                                  </tbody>
+   654→                                </table>
+   655→                              </div>
+   656→                            )}
+   657→                          </div>
+   658→                        </motion.div>
+   659→                      )}
+   660→                    </AnimatePresence>
+   661→                  </Card>
+   662→                </motion.div>
+   663→              )
+   664→            })}
+   665→          </AnimatePresence>
+   666→        </div>
+   667→      </div>
+   668→
+   669→      {/* Paused campaigns summary */}
+   670→      {pausedCampaigns.length > 0 && (
+   671→        <CollapsibleSection
+   672→          value="paused-campaigns"
+   673→          title={`Campañas Pausadas/Finalizadas (${pausedCampaigns.length})`}
+   674→          icon={<Megaphone className="h-4 w-4 text-muted-foreground" />}
+   675→          defaultOpen={false}
+   676→        >
+   677→          <div className="flex flex-wrap gap-2">
+   678→            {pausedCampaigns.map((c) => (
+   679→              <Badge key={c.id} variant="outline" className="text-xs">
+   680→                {c.name} — <StatusBadge status={c.status} />
+   681→              </Badge>
+   682→            ))}
+   683→          </div>
+   684→        </CollapsibleSection>
+   685→      )}
+   686→    </div>
+   687→  )
+   688→}
+   689→
+   690→// =============================================
+   691→// MOBILE ADSET CARD
+   692→// =============================================
+   693→function MobileAdSetCard({
+   694→  adSet,
+   695→  onScaleVertical,
+   696→  onScaleHorizontal,
+   697→  onKillSwitch,
+   698→  isUpdating,
+   699→}: {
+   700→  adSet: AdSet
+   701→  onScaleVertical: (id: string, budget: number) => void
+   702→  onScaleHorizontal: (id: string) => void
+   703→  onKillSwitch: (id: string) => void
+   704→  isUpdating: boolean
+   705→}) {
+   706→  return (
+   707→    <div className="p-3 rounded-xl border space-y-2">
+   708→      <div className="flex items-center justify-between">
+   709→        <span className="font-medium text-sm">{adSet.name.split(' - ').pop()}</span>
+   710→        <div className="flex items-center gap-1">
+   711→          <StatusBadge status={adSet.status} />
+   712→          {adSet.killSwitchTriggered && <span className="text-red-500 text-xs">🛑</span>}
+   713→        </div>
+   714→      </div>
+   715→      <div className="grid grid-cols-2 gap-2 text-xs">
+   716→        <div>
+   717→          <span className="text-muted-foreground">Región:</span>{' '}
+   718→          <span className="font-medium">{adSet.region?.code || '—'}</span>
+   719→        </div>
+   720→        <div>
+   721→          <span className="text-muted-foreground">Presupuesto:</span>{' '}
+   722→          <span className="font-medium">${adSet.budget.toFixed(2)}</span>
+   723→        </div>
+   724→        <div>
+   725→          <span className="text-muted-foreground">CPL:</span>{' '}
+   726→          <span className={adSet.cpl > (adSet.region?.cplTarget || 999) ? 'text-red-600 font-semibold' : 'text-emerald-600 font-semibold'}>
+   727→            ${adSet.cpl.toFixed(2)}
+   728→          </span>
+   729→        </div>
+   730→        <div>
+   731→          <span className="text-muted-foreground">Leads:</span>{' '}
+   732→          <span className="font-medium">{adSet.leadCount}</span>
+   733→        </div>
+   734→      </div>
+   735→      {adSet.scaleDirection && (
+   736→        <Badge variant="outline" className="text-[9px] px-1 py-0">
+   737→          {adSet.scaleDirection === 'V' ? '↕ Vertical' : '↔ Horizontal'}
+   738→        </Badge>
+   739→      )}
+   740→      {adSet.status === 'ACTIVE' && (
+   741→        <div className="flex gap-1 pt-1">
+   742→          <Button
+   743→            size="sm"
+   744→            variant="outline"
+   745→            className="flex-1 h-9 text-xs gap-1 rounded-lg active:scale-[0.97] transition-transform"
+   746→            onClick={() => onScaleVertical(adSet.id, adSet.budget)}
+   747→            disabled={isUpdating}
+   748→          >
+   749→            ↕ +15%
+   750→          </Button>
+   751→          <Button
+   752→            size="sm"
+   753→            variant="outline"
+   754→            className="flex-1 h-9 text-xs gap-1 rounded-lg active:scale-[0.97] transition-transform"
+   755→            onClick={() => onScaleHorizontal(adSet.id)}
+   756→            disabled={isUpdating}
+   757→          >
+   758→            ↔ Dup
+   759→          </Button>
+   760→          <Button
+   761→            size="sm"
+   762→            variant="outline"
+   763→            className="flex-1 h-9 text-xs text-red-600 gap-1 rounded-lg active:scale-[0.97] transition-transform"
+   764→            onClick={() => onKillSwitch(adSet.id)}
+   765→            disabled={isUpdating}
+   766→          >
+   767→            🛑 Kill
+   768→          </Button>
+   769→        </div>
+   770→      )}
+   771→    </div>
+   772→  )
+   773→}
+   774→
+   775→// =============================================
+   776→// DESKTOP ADSET ROW
+   777→// =============================================
+   778→function DesktopAdSetRow({
+   779→  adSet,
+   780→  onScaleVertical,
+   781→  onScaleHorizontal,
+   782→  onKillSwitch,
+   783→  isUpdating,
+   784→}: {
+   785→  adSet: AdSet
+   786→  onScaleVertical: (id: string, budget: number) => void
+   787→  onScaleHorizontal: (id: string) => void
+   788→  onKillSwitch: (id: string) => void
+   789→  isUpdating: boolean
+   790→}) {
+   791→  return (
+   792→    <tr className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+   793→      <td className="py-2.5 px-3">
+   794→        <div className="flex items-center gap-2">
+   795→          <span className="font-medium text-xs">{adSet.name.split(' - ').pop()}</span>
+   796→          {adSet.scaleDirection && (
+   797→            <Badge variant="outline" className="text-[9px] px-1 py-0">
+   798→              {adSet.scaleDirection === 'V' ? '↕ Vertical' : '↔ Horizontal'}
+   799→            </Badge>
+   800→          )}
+   801→        </div>
+   802→      </td>
+   803→      <td className="py-2.5 px-3 text-xs text-muted-foreground">
+   804→        {adSet.region?.code || '—'}
+   805→      </td>
+   806→      <td className="py-2.5 px-3 text-xs">
+   807→        <span className="font-medium">${adSet.budget.toFixed(2)}</span>
+   808→        <span className="text-muted-foreground ml-1">{adSet.budgetCurrency}</span>
+   809→      </td>
+   810→      <td className="py-2.5 px-3">
+   811→        <span className={adSet.cpl > (adSet.region?.cplTarget || 999) ? 'text-red-600 font-semibold' : 'text-emerald-600'}>
+   812→          ${adSet.cpl.toFixed(2)}
+   813→        </span>
+   814→      </td>
+   815→      <td className="py-2.5 px-3 text-xs">{adSet.leadCount}</td>
+   816→      <td className="py-2.5 px-3">
+   817→        <div className="flex items-center gap-1">
+   818→          <StatusBadge status={adSet.status} />
+   819→          {adSet.killSwitchTriggered && <span className="text-red-500 text-xs">🛑</span>}
+   820→        </div>
+   821→      </td>
+   822→      <td className="py-2.5 px-3">
+   823→        <div className="flex items-center justify-end gap-1">
+   824→          {adSet.status === 'ACTIVE' && (
+   825→            <>
+   826→              <Button
+   827→                size="sm"
+   828→                variant="ghost"
+   829→                className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950"
+   830→                onClick={() => onScaleVertical(adSet.id, adSet.budget)}
+   831→                disabled={isUpdating}
+   832→                title="Escalar Vertical +15%"
+   833→              >
+   834→                <TrendingUp className="h-3.5 w-3.5" />
+   835→              </Button>
+   836→              <Button
+   837→                size="sm"
+   838→                variant="ghost"
+   839→                className="h-7 px-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+   840→                onClick={() => onScaleHorizontal(adSet.id)}
+   841→                disabled={isUpdating}
+   842→                title="Escalar Horizontal (Duplicar)"
+   843→              >
+   844→                <Copy className="h-3.5 w-3.5" />
+   845→              </Button>
+   846→              <Button
+   847→                size="sm"
+   848→                variant="ghost"
+   849→                className="h-7 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+   850→                onClick={() => onKillSwitch(adSet.id)}
+   851→                disabled={isUpdating}
+   852→                title="Kill Switch"
+   853→              >
+   854→                <OctagonX className="h-3.5 w-3.5" />
+   855→              </Button>
+   856→            </>
+   857→          )}
+   858→        </div>
+   859→      </td>
+   860→    </tr>
+   861→  )
+   862→}
+   863→
