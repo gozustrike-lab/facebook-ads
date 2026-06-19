@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma generate && (prisma db push --accept-data-loss 2>&1 || echo '⚠️ db push failed, tables will be created on first API call') && next build",
+  "buildCommand": "prisma generate && (DIRECT_URL=\"${DIRECT_URL}\" DATABASE_URL=\"${DIRECT_URL}\" prisma db push --accept-data-loss 2>&1 || echo '⚠️ db push skipped — tables will be created via /api/init-db on first request') && next build",
   "installCommand": "bun install",
   "framework": "nextjs",
   "regions": ["iad1"]

@@ -221,13 +221,13 @@ export function MetaConnection() {
               Pixel y Business Manager automáticamente. Sin copiar ni pegar nada.
             </p>
 
-            {/* Config warning */}
-            {!process.env.NEXT_PUBLIC_META_APP_ID && (
+            {/* Config warning — check if NEXT_PUBLIC_META_CONFIG_ID exists (server vars aren't accessible on client) */}
+            {!process.env.NEXT_PUBLIC_META_CONFIG_ID && (
               <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
                 <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                 <div className="text-xs text-amber-700 dark:text-amber-300">
                   <p className="font-semibold">Configuración requerida</p>
-                  <p className="mt-0.5">Configura <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_ID</code>, <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_SECRET</code> y <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_META_CONFIG_ID</code> en Vercel.</p>
+                  <p className="mt-0.5">Configura <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_META_CONFIG_ID</code>, <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_ID</code> y <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">META_APP_SECRET</code> en Vercel.</p>
                 </div>
               </div>
             )}

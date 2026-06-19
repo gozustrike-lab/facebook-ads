@@ -1,7 +1,7 @@
 // API de Inicialización de DB - ImmiScale Meta Engine v5
 // Crea las tablas automáticamente en Vercel (primer deploy)
-// Llamar una vez después del deploy: curl https://tudominio.vercel.app/api/init-db
-// SAFE: Uses Prisma client directly instead of child_process
+// Llamar una vez después del deploy: https://tudominio.vercel.app/api/init-db
+// También se llama automáticamente desde el dashboard si las tablas no existen
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
@@ -15,13 +15,16 @@ export async function GET() {
       await db.$queryRaw`SELECT 1`
       results.push('Conexión a la base de datos verificada')
     } catch (dbError) {
-      results.push('ERROR: No se pudo conectar a la base de datos. Verifica DATABASE_URL.')
+      const msg = dbError instanceof Error ? dbError.message : String(dbError)
+      results.push('ERROR: No se pudo conectar a la base de datos.')
       console.error('[InitDB] DB connection failed:', dbError)
       return NextResponse.json({
         exito: false,
         results,
-        error: 'Base de datos no accesible. Para Vercel, usa PostgreSQL (no SQLite).',
-        hint: 'Configura DATABASE_URL con una conexión PostgreSQL externa como Vercel Postgres, Neon, o Supabase.',
+        error: 'Base de datos no accesible.',
+        hint: msg.includes('P1000') 
+          ? 'Credenciales incorrectas. Si tu contraseña tiene @, reemplázalo por %40 en DATABASE_URL y DIRECT_URL.'
+          : 'Verifica DATABASE_URL y DIRECT_URL en Vercel. Usa PostgreSQL (no SQLite) para Vercel serverless.',
       }, { status: 500 })
     }
 
@@ -35,24 +38,32 @@ export async function GET() {
     ]
 
     for (const region of defaultRegions) {
-      const existing = await db.region.findUnique({ where: { code: region.code } })
-      if (!existing) {
-        await db.region.create({ data: region })
-        results.push(`Región creada: ${region.name} (${region.code})`)
-      } else {
-        results.push(`Región ya existe: ${region.name} (${region.code})`)
+      try {
+        const existing = await db.region.findUnique({ where: { code: region.code } })
+        if (!existing) {
+          await db.region.create({ data: region })
+          results.push(`Región creada: ${region.name} (${region.code})`)
+        } else {
+          results.push(`Región ya existe: ${region.name} (${region.code})`)
+        }
+      } catch (err) {
+        results.push(`⚠️ Tabla Region no existe aún — prisma db push no se ejecutó. Error: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
 
     // Step 3: Count existing records
-    const [campaigns, adsets, leads, metrics] = await Promise.all([
-      db.campaign.count(),
-      db.adSet.count(),
-      db.lead.count(),
-      db.metric.count(),
-    ])
+    try {
+      const [campaigns, adsets, leads, metrics] = await Promise.all([
+        db.campaign.count(),
+        db.adSet.count(),
+        db.lead.count(),
+        db.metric.count(),
+      ])
 
-    results.push(`Tablas disponibles: ${campaigns} campañas, ${adsets} adsets, ${leads} leads, ${metrics} métricas`)
+      results.push(`Tablas disponibles: ${campaigns} campañas, ${adsets} adsets, ${leads} leads, ${metrics} métricas`)
+    } catch (err) {
+      results.push(`⚠️ Algunas tablas no existen aún: ${err instanceof Error ? err.message : String(err)}`)
+    }
 
     console.log('[InitDB] Initialization complete:', results)
 
@@ -60,7 +71,6 @@ export async function GET() {
       exito: true,
       message: 'Base de datos inicializada correctamente.',
       results,
-      stats: { campaigns, adsets, leads, metrics },
     })
   } catch (error) {
     console.error('[InitDB] Error al inicializar DB:', error)
@@ -69,7 +79,6 @@ export async function GET() {
         exito: false,
         results,
         error: `Error al inicializar: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-        hint: 'Si estás en Vercel, SQLite no es persistente. Configura DATABASE_URL con PostgreSQL.',
       },
       { status: 500 }
     )

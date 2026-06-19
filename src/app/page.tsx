@@ -126,6 +126,28 @@ export default function Dashboard() {
     queryFn: fetchRegions,
   })
 
+  // Auto-inicializar la base de datos si no hay regiones
+  const [dbInitialized, setDbInitialized] = useState(false)
+  React.useEffect(() => {
+    if (!dbInitialized && regions !== undefined) {
+      if (regions.length === 0) {
+        fetch('/api/init-db')
+          .then(r => r.json())
+          .then(data => {
+            console.log('[Dashboard] Auto-init DB:', data)
+            if (data.exito) {
+              queryClient.invalidateQueries({ queryKey: ['regions'] })
+              queryClient.invalidateQueries({ queryKey: ['meta-status'] })
+              queryClient.invalidateQueries({ queryKey: ['campaigns'] })
+              toast.success('Base de datos inicializada')
+            }
+          })
+          .catch(err => console.warn('[Dashboard] Auto-init failed:', err))
+      }
+      setDbInitialized(true)
+    }
+  }, [regions, dbInitialized, queryClient])
+
   const seedMutation = useMutation({
     mutationFn: seedDatabase,
     onSuccess: (data) => {
