@@ -6,17 +6,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // =============================================
-// NOTA PARA VERCEL:
-// SQLite funciona para desarrollo local.
-// Para producción en Vercel, cambiar a PostgreSQL:
-//   provider = "postgresql"
-//   url      = env("DATABASE_URL")  // postgresql://user:pass@host:5432/db
-// Y usar Vercel Postgres o cualquier DB externa.
+// BASE DE DATOS: PostgreSQL (Supabase / Vercel Postgres / Neon)
+// En Vercel serverless, SQLite NO persiste datos entre invocaciones.
+// PostgreSQL sí — las credenciales Meta, leads, campañas, etc. persisten.
 // =============================================
 
 // =============================================

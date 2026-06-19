@@ -113,19 +113,18 @@ export async function GET() {
     })
   } catch (error) {
     console.error('[MetaStatus] Error al verificar estado de conexión:', error)
-    return NextResponse.json(
-      {
-        connected: false,
-        accountId: null,
-        businessId: null,
-        pixelId: null,
-        tokenExpiresAt: null,
-        scopes: [],
-        lastSyncAt: null,
-        error: `Error interno: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-      },
-      { status: 500 }
-    )
+    // Graceful fallback: retornar desconectado sin error 500
+    // En serverless, la DB puede estar temporalmente no disponible
+    return NextResponse.json({
+      connected: false,
+      accountId: null,
+      businessId: null,
+      pixelId: null,
+      tokenExpiresAt: null,
+      scopes: [],
+      lastSyncAt: null,
+      error: 'No se pudo conectar a la base de datos. Si el problema persiste, verifica DATABASE_URL en Vercel.',
+    })
   }
 }
 

@@ -370,7 +370,15 @@ export interface ConnectionTestResult {
 // FUNCIONES META / FACEBOOK
 // =============================================
 export async function fetchMetaStatus(): Promise<MetaStatus> {
-  return apiFetch<MetaStatus>('/api/meta/status')
+  try {
+    return await apiFetch<MetaStatus>('/api/meta/status')
+  } catch {
+    // Graceful fallback: si la API falla, retornar desconectado sin crashear
+    return {
+      connected: false,
+      error: 'No se pudo verificar el estado de conexión con Meta',
+    }
+  }
 }
 
 export async function saveMetaCredentials(data: {
