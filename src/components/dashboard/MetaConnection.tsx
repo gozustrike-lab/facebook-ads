@@ -3,6 +3,7 @@
 // ImmiScale Meta Engine v5 — MetaConnection Rediseñado
 // Friction-Zero: 1 botón OAuth, 0 campos manuales
 // Mobile-First: Tarjeta minimalista con indicador de estado visual
+// SAFE: Works with or without Supabase configured
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { fetchMetaStatus, disconnectMeta, syncMetaData, testMetaConnection } from '@/lib/api'
@@ -15,11 +16,11 @@ import {
   Unplug,
   Loader2,
   CheckCircle2,
-  XCircle,
   Shield,
   Key,
   Activity,
   Zap,
+  AlertTriangle,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSupabaseAuth } from '@/hooks/use-supabase-auth'
@@ -28,13 +29,36 @@ import { es } from 'date-fns/locale'
 
 export function MetaConnection() {
   const queryClient = useQueryClient()
-  const { signInWithFacebook } = useSupabaseAuth()
+  const { signInWithFacebook, isConfigured: supabaseConfigured } = useSupabaseAuth()
 
   // Query para obtener estado de conexión
   const { data: metaStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['meta-status'],
     queryFn: fetchMetaStatus,
     refetchInterval: 30000,
+  })
+
+  // Mutation para conectar via /api/meta/connect (backend endpoint)
+  const connectMutation = useMutation({
+    mutationFn: async (token: string) => {
+      const res = await fetch('/api/meta/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ meta_token: token }),
+      })
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Error al conectar' }))
+        throw new Error(error.error || 'Error al conectar con Meta')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['meta-status'] })
+      toast.success('Cuenta de Meta configurada automáticamente')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Error al conectar con Meta')
+    },
   })
 
   // Mutation para desconectar
@@ -85,6 +109,17 @@ export function MetaConnection() {
     : { emoji: '🔴', label: 'Desconectado', bg: 'bg-red-50 dark:bg-red-950/20', border: 'border-red-200 dark:border-red-800', textColor: 'text-red-600 dark:text-red-400' }
 
   const status = statusConfig
+
+  // Handler for the 1-click OAuth button
+  const handleConnect = async () => {
+    if (supabaseConfigured) {
+      // Primary flow: Supabase OAuth (auto-detect everything)
+      await signInWithFacebook()
+    } else {
+      // Fallback: Show info about Supabase setup needed
+      toast.info('Para vincular con 1 clic, configura Supabase en tu proyecto. Ve a Ajustes → Configuración Avanzada.')
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -166,7 +201,7 @@ export function MetaConnection() {
             className="space-y-3"
           >
             <Button
-              onClick={signInWithFacebook}
+              onClick={handleConnect}
               className="w-full py-5 sm:py-6 text-base sm:text-lg font-bold rounded-xl
                          bg-[#1877F2] hover:bg-[#166FE5] text-white
                          shadow-lg shadow-blue-500/25
@@ -181,6 +216,17 @@ export function MetaConnection() {
               Sin copiar ni pegar nada. Autoriza con Facebook y nosotros
               configuramos tu Ad Account, Pixel y Business Manager automáticamente.
             </p>
+
+            {/* Supabase not configured warning */}
+            {!supabaseConfigured && (
+              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-700 dark:text-amber-300">
+                  <p className="font-semibold">OAuth requiere Supabase</p>
+                  <p className="mt-0.5">Configura <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_SUPABASE_URL</code> y <code className="font-mono bg-amber-100 dark:bg-amber-900/40 px-1 rounded">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> en Vercel para habilitar la conexión con 1 clic.</p>
+                </div>
+              </div>
+            )}
           </motion.div>
         ) : (
           <motion.div

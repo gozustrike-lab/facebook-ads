@@ -1,8 +1,18 @@
 // ImmiScale v5 — Supabase Server Client (SSR)
+// SAFE: Returns null if env vars are not configured
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
-export async function createServerSupabaseClient() {
+export function isSupabaseServerConfigured(): boolean {
+  return !!(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+}
+
+export async function createServerSupabaseClient(): Promise<SupabaseClient | null> {
+  if (!isSupabaseServerConfigured()) {
+    return null
+  }
+
   const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
