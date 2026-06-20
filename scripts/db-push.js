@@ -1,7 +1,7 @@
 // scripts/db-push.js
-// Ejecuta prisma db push usando la conexión DIRECTA (no el pooler)
-// El pooler (pgbouncer) NO soporta CREATE TABLE / DDL
-// Este script se ejecuta durante el build de Vercel
+// Ejecuta prisma db push usando cualquier conexión disponible
+// Prioriza DIRECT_URL, pero si no funciona usa DATABASE_URL (pooler)
+// El pooler con $executeRawUnsafe() SÍ soporta DDL
 
 const { execSync } = require('child_process')
 
@@ -17,23 +17,34 @@ if (!directUrl && !dbUrl) {
   process.exit(0)
 }
 
-// Para prisma db push, necesitamos la conexión DIRECTA (no el pooler)
-// porque pgbouncer NO soporta DDL (CREATE TABLE, ALTER TABLE, etc.)
-const urlForPush = directUrl || dbUrl
+// Intentar con DIRECT_URL primero, luego DATABASE_URL
+const urlsToTry = [directUrl, dbUrl].filter(Boolean)
+let success = false
 
-console.log(`   Usando URL para db push: ${urlForPush.replace(/:[^:@]+@/, ':****@')}`)
+for (const url of urlsToTry) {
+  const isDirect = url.includes('.supabase.co:5432')
+  const label = isDirect ? 'DIRECT_URL (conexión directa)' : 'DATABASE_URL (pooler)'
+  console.log(`\n🔗 Intentando con ${label}...`)
+  console.log(`   Host: ${url.replace(/:[^:@]+@/, ':****@')}`)
 
-try {
-  console.log('📦 Ejecutando prisma db push...')
-  execSync('npx prisma db push --accept-data-loss --skip-generate', {
-    env: { ...process.env, DATABASE_URL: urlForPush },
-    stdio: 'inherit',
-    timeout: 60000,
-  })
-  console.log('✅ Tablas creadas exitosamente')
-} catch (err) {
-  console.log('⚠️ prisma db push falló. Las tablas se crearán via /api/setup en runtime.')
-  console.log('   Error:', err.message?.substring(0, 200) || err)
-  // No fallar el build — las tablas se pueden crear via /api/setup
-  process.exit(0)
+  try {
+    execSync('npx prisma db push --accept-data-loss --skip-generate', {
+      env: { ...process.env, DATABASE_URL: url },
+      stdio: 'inherit',
+      timeout: 60000,
+    })
+    console.log(`✅ Tablas creadas exitosamente via ${label}`)
+    success = true
+    break
+  } catch (err) {
+    console.log(`⚠️ Falló con ${label}. Intentando siguiente...`)
+  }
 }
+
+if (!success) {
+  console.log('⚠️ prisma db push falló con todas las URLs.')
+  console.log('   Las tablas se crearán via /api/setup en runtime.')
+}
+
+// No fallar el build
+process.exit(0)

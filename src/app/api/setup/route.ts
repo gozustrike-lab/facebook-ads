@@ -1,36 +1,23 @@
-// /api/setup — Crea todas las tablas en PostgreSQL usando raw SQL
-// Fallback para cuando prisma db push falla durante el build de Vercel
-// Usa DIRECT_URL (conexión directa) porque pgbouncer NO soporta DDL
+// /api/setup — Crea todas las tablas usando el POOLER (DATABASE_URL)
+// La conexión directa (DIRECT_URL) está bloqueada por Supabase en algunos planes
+// El pooler SÍ soporta raw SQL DDL (CREATE TABLE) — lo que NO soporta es
+// las "prepared statements" que Prisma Client usa internamente
+// Solución: usar $executeRawUnsafe() con el pooler
 
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { db } from '@/lib/db'
 
 export async function GET() {
   const results: string[] = []
-  const directUrl = process.env.DIRECT_URL
-
-  if (!directUrl) {
-    return NextResponse.json({
-      exito: false,
-      error: 'DIRECT_URL no está configurada. Necesaria para crear tablas (pgbouncer no soporta DDL).',
-    }, { status: 500 })
-  }
-
-  // Crear cliente Prisma con conexión directa para DDL
-  const directClient = new PrismaClient({
-    datasources: {
-      db: { url: directUrl },
-    },
-  })
 
   try {
-    // Verificar conexión
-    await directClient.$queryRaw`SELECT 1`
-    results.push('Conexión directa a PostgreSQL verificada')
+    // Verificar conexión (usa pooler = DATABASE_URL)
+    await db.$queryRaw`SELECT 1`
+    results.push('✅ Conexión a PostgreSQL verificada (via pooler)')
 
-    // Crear tablas una por una en orden de dependencias
+    // Crear tablas usando raw SQL a través del pooler
+    // $executeRawUnsafe() envía SQL directo sin prepared statements
     const createTables = [
-      // 1. Region (sin dependencias)
       `CREATE TABLE IF NOT EXISTS "Region" (
         "id" TEXT NOT NULL,
         "code" TEXT NOT NULL,
@@ -45,7 +32,6 @@ export async function GET() {
         CONSTRAINT "Region_pkey" PRIMARY KEY ("id"),
         CONSTRAINT "Region_code_key" UNIQUE ("code")
       )`,
-      // 2. Campaign (sin dependencias)
       `CREATE TABLE IF NOT EXISTS "Campaign" (
         "id" TEXT NOT NULL,
         "metaCampaignId" TEXT,
@@ -61,7 +47,6 @@ export async function GET() {
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "Campaign_pkey" PRIMARY KEY ("id")
       )`,
-      // 3. AdSet (depende de Campaign y Region)
       `CREATE TABLE IF NOT EXISTS "AdSet" (
         "id" TEXT NOT NULL,
         "metaAdSetId" TEXT,
@@ -83,7 +68,6 @@ export async function GET() {
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "AdSet_pkey" PRIMARY KEY ("id")
       )`,
-      // 4. Lead (depende de Region)
       `CREATE TABLE IF NOT EXISTS "Lead" (
         "id" TEXT NOT NULL,
         "firstName" TEXT,
@@ -109,7 +93,6 @@ export async function GET() {
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "Lead_pkey" PRIMARY KEY ("id")
       )`,
-      // 5. Metric (depende de Region)
       `CREATE TABLE IF NOT EXISTS "Metric" (
         "id" TEXT NOT NULL,
         "regionId" TEXT NOT NULL,
@@ -126,7 +109,6 @@ export async function GET() {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "Metric_pkey" PRIMARY KEY ("id")
       )`,
-      // 6. Payment (depende de Lead)
       `CREATE TABLE IF NOT EXISTS "Payment" (
         "id" TEXT NOT NULL,
         "leadId" TEXT NOT NULL,
@@ -143,7 +125,6 @@ export async function GET() {
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
       )`,
-      // 7. ChatSession (sin dependencias)
       `CREATE TABLE IF NOT EXISTS "ChatSession" (
         "id" TEXT NOT NULL,
         "visitorId" TEXT NOT NULL,
@@ -157,7 +138,6 @@ export async function GET() {
         "updatedAt" TIMESTAMP(3) NOT NULL,
         CONSTRAINT "ChatSession_pkey" PRIMARY KEY ("id")
       )`,
-      // 8. CAPIEvent (sin dependencias)
       `CREATE TABLE IF NOT EXISTS "CAPIEvent" (
         "id" TEXT NOT NULL,
         "eventId" TEXT NOT NULL,
@@ -174,7 +154,6 @@ export async function GET() {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "CAPIEvent_pkey" PRIMARY KEY ("id")
       )`,
-      // 9. MetaCredential (sin dependencias)
       `CREATE TABLE IF NOT EXISTS "MetaCredential" (
         "id" TEXT NOT NULL,
         "appId" TEXT NOT NULL,
@@ -197,39 +176,49 @@ export async function GET() {
       )`,
     ]
 
-    // Ejecutar CREATE TABLE
     for (const sql of createTables) {
       const tableName = sql.match(/"(\w+)"/)?.[1] || 'unknown'
       try {
-        await directClient.$executeRawUnsafe(sql)
+        await db.$executeRawUnsafe(sql)
         results.push(`✅ Tabla ${tableName} creada`)
-      } catch (err) {
+      } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         if (msg.includes('already exists')) {
           results.push(`⏭️ Tabla ${tableName} ya existe`)
         } else {
-          results.push(`⚠️ Error creando ${tableName}: ${msg.substring(0, 100)}`)
+          results.push(`⚠️ ${tableName}: ${msg.substring(0, 120)}`)
         }
       }
     }
 
-    // Crear índices y foreign keys
+    // Crear foreign keys e índices
     const constraints = [
-      // Foreign keys para AdSet
       `ALTER TABLE "AdSet" DROP CONSTRAINT IF EXISTS "AdSet_campaignId_fkey"`,
       `ALTER TABLE "AdSet" ADD CONSTRAINT "AdSet_campaignId_fkey" FOREIGN KEY ("campaignId") REFERENCES "Campaign"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
       `ALTER TABLE "AdSet" DROP CONSTRAINT IF EXISTS "AdSet_regionId_fkey"`,
       `ALTER TABLE "AdSet" ADD CONSTRAINT "AdSet_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "Region"("id") ON DELETE RESTRICT ON UPDATE CASCADE`,
-      // Foreign keys para Lead
       `ALTER TABLE "Lead" DROP CONSTRAINT IF EXISTS "Lead_regionId_fkey"`,
       `ALTER TABLE "Lead" ADD CONSTRAINT "Lead_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "Region"("id") ON DELETE RESTRICT ON UPDATE CASCADE`,
-      // Foreign keys para Metric
       `ALTER TABLE "Metric" DROP CONSTRAINT IF EXISTS "Metric_regionId_fkey"`,
       `ALTER TABLE "Metric" ADD CONSTRAINT "Metric_regionId_fkey" FOREIGN KEY ("regionId") REFERENCES "Region"("id") ON DELETE RESTRICT ON UPDATE CASCADE`,
-      // Foreign keys para Payment
       `ALTER TABLE "Payment" DROP CONSTRAINT IF EXISTS "Payment_leadId_fkey"`,
       `ALTER TABLE "Payment" ADD CONSTRAINT "Payment_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
-      // Índices
+    ]
+
+    for (const sql of constraints) {
+      try {
+        await db.$executeRawUnsafe(sql)
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        if (!msg.includes('already exists') && !msg.includes('already registered')) {
+          results.push(`⚠️ FK: ${msg.substring(0, 80)}`)
+        }
+      }
+    }
+    results.push('✅ Foreign keys configuradas')
+
+    // Crear índices
+    const indexes = [
       `CREATE INDEX IF NOT EXISTS "AdSet_campaignId_idx" ON "AdSet"("campaignId")`,
       `CREATE INDEX IF NOT EXISTS "AdSet_regionId_idx" ON "AdSet"("regionId")`,
       `CREATE INDEX IF NOT EXISTS "Lead_regionId_idx" ON "Lead"("regionId")`,
@@ -245,25 +234,20 @@ export async function GET() {
       `CREATE INDEX IF NOT EXISTS "CAPIEvent_eventName_idx" ON "CAPIEvent"("eventName")`,
       `CREATE INDEX IF NOT EXISTS "CAPIEvent_country_idx" ON "CAPIEvent"("country")`,
       `CREATE INDEX IF NOT EXISTS "CAPIEvent_sentToMeta_idx" ON "CAPIEvent"("sentToMeta")`,
-      // Unique constraint para Metric
       `ALTER TABLE "Metric" DROP CONSTRAINT IF EXISTS "Metric_regionId_date_key"`,
       `CREATE UNIQUE INDEX IF NOT EXISTS "Metric_regionId_date_key" ON "Metric"("regionId", "date")`,
     ]
 
-    for (const sql of constraints) {
+    for (const sql of indexes) {
       try {
-        await directClient.$executeRawUnsafe(sql)
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        // Ignorar errores de constraints que ya existen
-        if (!msg.includes('already exists') && !msg.includes('already registered')) {
-          results.push(`⚠️ Constraint: ${msg.substring(0, 80)}`)
-        }
+        await db.$executeRawUnsafe(sql)
+      } catch {
+        // Ignorar errores de índices duplicados
       }
     }
-    results.push('✅ Índices y foreign keys configurados')
+    results.push('✅ Índices creados')
 
-    // Seed de regiones por defecto
+    // Seed regiones por defecto
     const defaultRegions = [
       { code: 'US', name: 'Estados Unidos', currency: 'USD', cplTarget: 25.0, cplKillSwitch: 37.5, language: 'es' },
       { code: 'PE', name: 'Perú', currency: 'PEN', cplTarget: 15.0, cplKillSwitch: 22.5, language: 'es' },
@@ -274,17 +258,25 @@ export async function GET() {
 
     for (const region of defaultRegions) {
       try {
-        const existing = await directClient.region.findUnique({ where: { code: region.code } })
+        const existing = await db.region.findUnique({ where: { code: region.code } })
         if (!existing) {
-          await directClient.region.create({ data: region })
-          results.push(`Región creada: ${region.name} (${region.code})`)
+          await db.region.create({ data: region })
+          results.push(`🌍 Región creada: ${region.name} (${region.code})`)
+        } else {
+          results.push(`⏭️ Región ya existe: ${region.name}`)
         }
-      } catch (err) {
-        results.push(`⚠️ Seed región ${region.code}: ${err instanceof Error ? err.message.substring(0, 60) : String(err)}`)
+      } catch (err: unknown) {
+        results.push(`⚠️ Seed ${region.code}: ${err instanceof Error ? err.message.substring(0, 60) : String(err)}`)
       }
     }
 
-    console.log('[Setup] Setup complete:', results)
+    console.log('[Setup] Complete:', results)
+
+    return NextResponse.json({
+      exito: true,
+      message: 'Base de datos configurada correctamente',
+      results,
+    })
 
   } catch (error) {
     console.error('[Setup] Error:', error)
@@ -293,13 +285,5 @@ export async function GET() {
       results,
       error: error instanceof Error ? error.message : String(error),
     }, { status: 500 })
-  } finally {
-    await directClient.$disconnect()
   }
-
-  return NextResponse.json({
-    exito: true,
-    message: 'Base de datos configurada correctamente',
-    results,
-  })
 }
