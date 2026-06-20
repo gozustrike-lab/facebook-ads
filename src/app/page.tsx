@@ -131,10 +131,11 @@ export default function Dashboard() {
   React.useEffect(() => {
     if (!dbInitialized && regions !== undefined) {
       if (regions.length === 0) {
-        fetch('/api/init-db')
+        // Primero intentar /api/setup (crea tablas con raw SQL + seed)
+        fetch('/api/setup')
           .then(r => r.json())
           .then(data => {
-            console.log('[Dashboard] Auto-init DB:', data)
+            console.log('[Dashboard] Auto-setup DB:', data)
             if (data.exito) {
               queryClient.invalidateQueries({ queryKey: ['regions'] })
               queryClient.invalidateQueries({ queryKey: ['meta-status'] })
@@ -142,7 +143,7 @@ export default function Dashboard() {
               toast.success('Base de datos inicializada')
             }
           })
-          .catch(err => console.warn('[Dashboard] Auto-init failed:', err))
+          .catch(err => console.warn('[Dashboard] Auto-setup failed:', err))
       }
       setDbInitialized(true)
     }
