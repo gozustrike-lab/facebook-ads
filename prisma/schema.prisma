@@ -1,5 +1,6 @@
-// ImmiScale Meta Engine v5 - Global Edition
-// Schema de Base de Datos Multinacional
+// AdScale OS — Universal White-Label AI Ads Operating System
+// Evolved from ImmiScale Meta Engine v5
+// Multi-tenant, multi-industry, white-label capable
 
 generator client {
   provider = "prisma-client-js"
@@ -12,227 +13,389 @@ datasource db {
 }
 
 // =============================================
-// BASE DE DATOS: PostgreSQL (Supabase / Vercel Postgres / Neon)
-// En Vercel serverless, SQLite NO persiste datos entre invocaciones.
-// PostgreSQL sí — las credenciales Meta, leads, campañas, etc. persisten.
+// MULTI-TENANT FOUNDATION
 // =============================================
 
-// =============================================
-// REGIÓN / CONFIGURACIÓN POR PAÍS
-// =============================================
-model Region {
-  id            String   @id @default(cuid())
-  code          String   @unique  // "US", "PE", "CO", "MX", "GLOBAL"
-  name          String             // "Estados Unidos", "Perú", "Colombia"
-  currency      String   @default("USD")  // Moneda local: USD, PEN, COP, MXN
-  cplTarget     Float    @default(25.0)   // Costo por Lead objetivo en moneda local
-  cplKillSwitch Float    @default(37.5)   // 1.5x CPL para kill-switch
-  language      String   @default("es")   // Idioma principal del chatbot
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+/// Organization is the root entity for multi-tenancy.
+/// All data is scoped by organizationId.
+model Organization {
+  id           String   @id @default(cuid())
+  name         String                        // "Gonzalez Immigration Law"
+  industry     String                        // "immigration", "real_estate", "dental", "ecommerce", etc.
+  brandName    String                        // Public-facing name for white-label
+  logoUrl      String?
+  primaryColor String?                       // Hex color for branding
+  domain       String?                       // Custom domain (white-label)
+  nicheConfig  Json?                         // Industry-specific config (custom fields, scoring rules, KPIs)
+  slug         String   @unique              // URL-safe identifier: "gonzalez-law"
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  adSets   AdSet[]
-  leads    Lead[]
-  metrics  Metric[]
+  users           User[]
+  campaigns       Campaign[]
+  leads           Lead[]
+  regions         Region[]
+  metrics         Metric[]
+  metaCredentials MetaCredential[]
+  chatSessions    ChatSession[]
+  capiEvents      CAPIEvent[]
+  pipelineStages  PipelineStage[]
+  whiteLabel      WhiteLabelConfig?
+  templates       Template[]
+
+  @@index([industry])
+  @@index([slug])
 }
 
 // =============================================
-// CAMPAÑAS META ADS
+// USER / AUTH
 // =============================================
-model Campaign {
-  id              String   @id @default(cuid())
-  metaCampaignId  String?             // ID de la campaña en Meta
-  name            String
-  objective       String   @default("LEAD_GENERATION")
-  status          String   @default("ACTIVE")  // ACTIVE, PAUSED, KILLED, COMPLETED
-  totalBudget     Float    @default(0)
-  totalSpend      Float    @default(0)
-  matchScore      Float    @default(0)    // Meta Match Score (0-100)
-  autoScale       Boolean  @default(true) // Escalado automático habilitado
-  lastScaledAt    DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
-  adSets AdSet[]
-}
-
-// =============================================
-// ADSETS - CONJUNTOS DE ANUNCIOS
-// =============================================
-model AdSet {
+model User {
   id             String   @id @default(cuid())
-  metaAdSetId    String?             // ID del adset en Meta
-  name           String
-  campaignId     String
-  regionId       String
-  budget         Float               // Presupuesto diario
-  budgetCurrency String   @default("USD")
-  dailySpend     Float    @default(0)
-  cpl            Float    @default(0)      // Costo por Lead actual
-  leadCount      Int      @default(0)
-  audienceType   String   @default("BROAD") // BROAD, LOOKALIKE, CUSTOM
-  targetingJson  String?             // JSON con configuración de targeting
-  status         String   @default("ACTIVE") // ACTIVE, PAUSED, KILLED, LEARNING
-  scaleDirection String?             // "H" (horizontal), "V" (vertical), null
-  lastBudgetInc  DateTime?
-  killSwitchTriggered Boolean @default(false)
+  organizationId String
+  email          String   @unique
+  name           String?
+  avatarUrl      String?
+  role           String   @default("member") // owner, admin, member
+  authProvider   String   @default("supabase") // supabase, google, facebook
+  authProviderId String?                       // ID from auth provider
+  isActive       Boolean  @default(true)
+  lastLoginAt    DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// =============================================
+// WHITE-LABEL CONFIG
+// =============================================
+
+model WhiteLabelConfig {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  appName        String                        // "AdScale OS" or client's brand
+  logoUrl        String?
+  faviconUrl     String?
+  domain         String?                       // Custom domain
+  primaryColor   String?                       // Main brand color
+  accentColor    String?
+  supportEmail   String?
+  smtpConfig     Json?                         // SMTP settings for branded emails
+  landingConfig  Json?                         // Landing page customization
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// =============================================
+// PIPELINE STAGES (CRM)
+// =============================================
+
+model PipelineStage {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String                        // "Lead", "Appointment", "Consultation", "Closed"
+  order          Int                           // Display order
+  color          String?                       // Hex color for UI
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+// =============================================
+// TEMPLATES
+// =============================================
+
+model Template {
+  id             String   @id @default(cuid())
+  organizationId String?                       // null = global template, set = org-specific
+  industry       String                        // "immigration", "real_estate", "dental", etc.
+  objective      String                        // "LEAD_GENERATION", "CONVERSION", "TRAFFIC"
+  funnelType     String                        // "whatsapp", "messenger", "website", "lead_form"
+  name           String
+  description    String?
+  config         Json                          // Campaign structure, audience, targeting, copy
+  isPublic       Boolean  @default(true)       // Available to all orgs?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([industry])
+  @@index([objective])
+}
+
+// =============================================
+// REGIÓN / MARKET REGION
+// =============================================
+
+model Region {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String                        // "US", "PE", "CO", "MX", "GLOBAL"
+  name           String                        // "Estados Unidos", "Perú"
+  currency       String   @default("USD")      // Local currency
+  cplTarget      Float    @default(25.0)       // Target CPL in local currency
+  cplKillSwitch  Float    @default(37.5)       // 1.5x CPL kill-switch
+  language       String   @default("es")
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adSets       AdSet[]
+  leads        Lead[]
+  metrics      Metric[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+}
+
+// =============================================
+// CAMPAIGNS
+// =============================================
+
+model Campaign {
+  id              String    @id @default(cuid())
+  organizationId  String
+  metaCampaignId  String?                         // Meta campaign ID
+  name            String
+  objective       String    @default("LEAD_GENERATION")
+  industry        String?                          // Industry tag
+  templateId      String?                          // Template used to create this
+  status          String    @default("ACTIVE")     // ACTIVE, PAUSED, KILLED, COMPLETED
+  totalBudget     Float     @default(0)
+  totalSpend      Float     @default(0)
+  matchScore      Float     @default(0)            // Meta Match Score (0-100)
+  autoScale       Boolean   @default(true)
+  lastScaledAt    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adSets       AdSet[]
+
+  @@index([organizationId])
+  @@index([status])
+}
+
+// =============================================
+// ADSETS
+// =============================================
+
+model AdSet {
+  id                   String   @id @default(cuid())
+  organizationId       String
+  metaAdSetId          String?
+  name                 String
+  campaignId           String
+  regionId             String
+  budget               Float
+  budgetCurrency       String   @default("USD")
+  dailySpend           Float    @default(0)
+  cpl                  Float    @default(0)
+  leadCount            Int      @default(0)
+  audienceType         String   @default("BROAD") // BROAD, LOOKALIKE, CUSTOM
+  targetingJson        String?
+  status               String   @default("ACTIVE")
+  scaleDirection       String?                       // "H" (horizontal), "V" (vertical)
+  lastBudgetInc        DateTime?
+  killSwitchTriggered  Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   region   Region   @relation(fields: [regionId], references: [id])
 
+  @@index([organizationId])
   @@index([campaignId])
   @@index([regionId])
 }
 
 // =============================================
-// LEADS - PRE-CALIFICADOS
+// LEADS — Universal (customFields replaces niche-specific fields)
 // =============================================
+
 model Lead {
-  id              String   @id @default(cuid())
-  firstName       String?
-  lastName        String?
-  email           String?
-  phone           String?
-  country         String             // País de origen detectado
-  regionId        String
-  route           String             // "IN_COUNTRY_US" o "OUT_COUNTRY_GLOBAL"
-  visaType        String?            // ASILO, EB2_NIW, H1B, FAMILY, WORK, OTHER
-  hasCriminalRecord Boolean? 
-  investmentCapacity String?         // "LOW", "MEDIUM", "HIGH"
-  hasUniversityDegree Boolean?
-  hasUsFamily     Boolean?
-  solvencyVerified Boolean?
-  qualificationScore Float  @default(0)  // 0-100 score de calificación
-  status          String   @default("NEW") // NEW, QUALIFIED, DISQUALIFIED, CONTACTED, PAID, LOST
-  chatSessionId   String?
-  source          String   @default("META_ADS") // META_ADS, ORGANIC, REFERRAL
-  metaAdId        String?
-  notes           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String?                         // Combined first + last name
+  firstName      String?                         // Kept for backward compat
+  lastName       String?                         // Kept for backward compat
+  email          String?
+  phone          String?
+  country        String?                         // Detected/prompted country
+  regionId       String?
+  stage          String   @default("NEW")         // Pipeline stage: NEW, QUALIFIED, CONTACTED, PAID, LOST
+  score          Float    @default(0)             // 0-100 lead quality score
+  customFields   Json?                           // Industry-specific data (see examples below)
+  source         String   @default("META_ADS")    // META_ADS, ORGANIC, REFERRAL, WHATEVER
+  metaAdId       String?
+  chatSessionId  String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  region   Region   @relation(fields: [regionId], references: [id])
-  payments Payment[]
+  // customFields examples by industry:
+  // Immigration: { "visaType": "EB2", "hasCriminalRecord": false, "investmentCapacity": "HIGH" }
+  // Real Estate: { "budget": 250000, "propertyType": "House", "location": "Miami" }
+  // Dental:      { "treatment": "Implants", "insurance": true }
+  // Ecommerce:   { "productCategory": "Shoes", "cartValue": 89.99 }
+  // Restaurant:  { "partySize": 4, "reservationDate": "2025-01-15" }
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  region        Region?     @relation(fields: [regionId], references: [id])
+  payments      Payment[]
+
+  @@index([organizationId])
   @@index([regionId])
-  @@index([status])
-  @@index([route])
+  @@index([stage])
+  @@index([source])
 }
 
 // =============================================
-// PAGOS - MULTIDIVISA
+// PAYMENTS — Multi-currency
 // =============================================
+
 model Payment {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
+  organizationId  String
   leadId          String
   amount          Float
-  currency        String   @default("USD")  // USD, PEN, COP, MXN
-  amountUsd       Float    @default(0)       // Monto convertido a USD
-  exchangeRate    Float    @default(1)
-  gateway         String   @default("STRIPE") // STRIPE, MERCADO_PAGO, NIUBIZ, CULQI
-  gatewayRefId    String?                    // Referencia del gateway
-  status          String   @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
+  currency        String    @default("USD")
+  amountUsd       Float     @default(0)
+  exchangeRate    Float     @default(1)
+  gateway         String    @default("STRIPE") // STRIPE, MERCADO_PAGO, NIUBIZ, CULQI
+  gatewayRefId    String?
+  status          String    @default("PENDING") // PENDING, COMPLETED, FAILED, REFUNDED
   description     String?
   paidAt          DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
+  @@index([organizationId])
   @@index([leadId])
   @@index([status])
   @@index([gateway])
 }
 
 // =============================================
-// MÉTRICAS DIARIAS POR REGIÓN
+// METRICS — Daily by Region
 // =============================================
+
 model Metric {
   id              String   @id @default(cuid())
+  organizationId  String
   regionId        String
-  date            DateTime             // Fecha de la métrica
-  totalSpend      Float    @default(0) // Gasto total del día
-  leadCount       Int      @default(0) // Leads totales
-  qualifiedCount  Int      @default(0) // Leads calificados
-  paidCount       Int      @default(0) // Consultas pagadas
-  cpql            Float    @default(0) // Costo por Lead Calificado
-  cpl             Float    @default(0) // Costo por Lead
-  revenue         Float    @default(0) // Ingresos del día (USD)
-  matchScore      Float    @default(0) // Meta Match Score promedio
+  date            DateTime
+  totalSpend      Float    @default(0)
+  leadCount       Int      @default(0)
+  qualifiedCount  Int      @default(0)
+  paidCount       Int      @default(0)
+  cpql            Float    @default(0)
+  cpl             Float    @default(0)
+  revenue         Float    @default(0)
+  matchScore      Float    @default(0)
   currency        String   @default("USD")
   createdAt       DateTime @default(now())
 
-  region Region @relation(fields: [regionId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  region        Region      @relation(fields: [regionId], references: [id])
 
   @@unique([regionId, date])
+  @@index([organizationId])
   @@index([regionId])
   @@index([date])
 }
 
 // =============================================
-// SESIONES DE CHATBOT
+// CHATBOT SESSIONS
 // =============================================
-model ChatSession {
-  id              String   @id @default(cuid())
-  visitorId       String              // ID del visitante (cookie/fingerprint)
-  country         String?             // País detectado/pregunta
-  route           String?             // Ruta asignada: IN_COUNTRY_US, OUT_COUNTRY_GLOBAL
-  currentStep     String  @default("GREETING") // Paso actual del flujo
-  answersJson     String?             // JSON con respuestas del usuario
-  qualificationResult String?         // Resultado de pre-calificación
-  completedAt     DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
+model ChatSession {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  visitorId           String
+  country             String?
+  currentStep         String   @default("GREETING")
+  answersJson         String?                        // JSON with user responses
+  qualificationResult String?
+  leadId              String?                        // Link to created lead
+  completedAt         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
   @@index([visitorId])
-  @@index([route])
 }
 
 // =============================================
-// EVENTOS CAPI (Meta Conversions API)
+// CAPI EVENTS (Meta Conversions API)
 // =============================================
+
 model CAPIEvent {
   id              String   @id @default(cuid())
-  eventId         String              // ID único del evento para deduplicación
-  eventName       String              // Lead, Purchase, CompleteRegistration
-  sourceUrl       String?             // URL de origen
-  country         String?             // País del lead
+  organizationId  String
+  eventId         String                         // Unique event ID for deduplication
+  eventName       String                         // Lead, Purchase, CompleteRegistration
+  sourceUrl       String?
+  country         String?
   userAgent       String?
-  ipHash          String?             // Hash de IP (privacidad)
-  fbclid          String?             // Facebook Click ID
-  fbp             String?             // Facebook Browser ID
+  ipHash          String?
+  fbclid          String?
+  fbp             String?
   eventTime       DateTime @default(now())
   sentToMeta      Boolean  @default(false)
   metaResponse    String?
   createdAt       DateTime @default(now())
 
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
   @@index([eventName])
-  @@index([country])
   @@index([sentToMeta])
 }
 
 // =============================================
-// CREDENCIALES META / FACEBOOK DEV
+// META CREDENTIALS (per organization)
 // =============================================
+
 model MetaCredential {
-  id                String   @id @default(cuid())
-  appId             String              // Facebook App ID
-  appSecret         String              // Facebook App Secret (encriptado en producción)
-  accessToken       String              // Token de acceso de larga duración
-  tokenExpiresAt    DateTime?           // Fecha de expiración del token
-  refreshToken      String?             // Token de refresco
-  accountId         String?             // Ad Account ID (act_xxxxx)
-  pixelId           String?             // Meta Pixel ID
-  businessId        String?             // Business Manager ID
-  graphApiVersion   String   @default("v21.0") // Versión de la Graph API
-  scope             String?             // Permisos otorgados (JSON)
-  isConnected       Boolean  @default(false)    // Estado de la conexión
-  lastSyncAt        DateTime?           // Última sincronización exitosa
-  connectionStatus  String   @default("DISCONNECTED") // DISCONNECTED, CONNECTED, ERROR, EXPIRED
-  errorMessage      String?             // Último mensaje de error
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String    @id @default(cuid())
+  organizationId   String
+  appId            String
+  appSecret        String
+  accessToken      String
+  tokenExpiresAt   DateTime?
+  refreshToken     String?
+  accountId        String?                         // Ad Account ID (act_xxxxx)
+  pixelId          String?                         // Meta Pixel ID
+  businessId       String?                         // Business Manager ID
+  graphApiVersion  String    @default("v21.0")
+  scope            String?
+  isConnected      Boolean   @default(false)
+  lastSyncAt       DateTime?
+  connectionStatus String    @default("DISCONNECTED")
+  errorMessage     String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
 }
