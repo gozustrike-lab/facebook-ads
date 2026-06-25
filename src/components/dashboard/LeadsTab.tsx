@@ -32,17 +32,14 @@ import { useMediaQuery } from '@/hooks/use-media-query'
 import type { Lead } from '@/lib/api'
 
 const ROUTE_LABELS: Record<string, string> = {
-  IN_COUNTRY_US: '🇺🇸 In-Country US',
-  OUT_COUNTRY_GLOBAL: '🌍 Out-Country Global',
+  IN_COUNTRY_US: '📍 In-Market',
+  OUT_COUNTRY_GLOBAL: '🌐 Out-of-Market',
 }
 
-const VISA_LABELS: Record<string, string> = {
-  ASILO: 'Asilo & Refugio',
-  EB2_NIW: 'EB-2 NIW',
-  H1B: 'H-1B',
-  FAMILY: 'Reunificación Familiar',
-  WORK: 'Visa de Trabajo',
-  EB5: 'EB-5 Inversión',
+const CATEGORY_LABELS: Record<string, string> = {
+  FAMILY: 'Familia',
+  WORK: 'Trabajo',
+  INVESTMENT: 'Inversión',
   OTHER: 'Otro',
 }
 
@@ -102,7 +99,7 @@ export function LeadsTab() {
         <span>{lead.country}</span>
         <span>·</span>
         <span className={lead.route === 'IN_COUNTRY_US' ? 'text-teal-600' : 'text-amber-600'}>
-          {lead.route === 'IN_COUNTRY_US' ? '🇺🇸 In' : '🌍 Out'}
+          {lead.route === 'IN_COUNTRY_US' ? '📍 In' : '🌐 Out'}
         </span>
         <span>·</span>
         <span>Score: <span className={`font-semibold ${
@@ -111,7 +108,7 @@ export function LeadsTab() {
         }`}>{lead.qualificationScore}</span></span>
       </div>
       <div className="flex items-center gap-2">
-        {lead.visaType && <Badge variant="outline" className="text-[10px]">{VISA_LABELS[lead.visaType] || lead.visaType}</Badge>}
+        {lead.visaType && <Badge variant="outline" className="text-[10px]">{CATEGORY_LABELS[lead.visaType] || lead.visaType}</Badge>}
         <span className="text-[10px] text-muted-foreground ml-auto">{format(new Date(lead.createdAt), 'dd/MM/yy HH:mm')}</span>
       </div>
       <Button
@@ -162,12 +159,12 @@ export function LeadsTab() {
             </Select>
             <Select value={routeFilter} onValueChange={setRouteFilter}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Ruta" />
+                <SelectValue placeholder="Stage" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todas las rutas</SelectItem>
-                <SelectItem value="IN_COUNTRY_US">🇺🇸 In-Country US</SelectItem>
-                <SelectItem value="OUT_COUNTRY_GLOBAL">🌍 Out-Country</SelectItem>
+                <SelectItem value="ALL">Todos los stages</SelectItem>
+                <SelectItem value="IN_COUNTRY_US">📍 In-Market</SelectItem>
+                <SelectItem value="OUT_COUNTRY_GLOBAL">🌐 Out-of-Market</SelectItem>
               </SelectContent>
             </Select>
             <Select value={regionFilter} onValueChange={setRegionFilter}>
@@ -213,12 +210,12 @@ export function LeadsTab() {
               </Select>
               <Select value={routeFilter} onValueChange={setRouteFilter}>
                 <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Ruta" />
+                  <SelectValue placeholder="Stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todas las rutas</SelectItem>
-                  <SelectItem value="IN_COUNTRY_US">🇺🇸 In-Country US</SelectItem>
-                  <SelectItem value="OUT_COUNTRY_GLOBAL">🌍 Out-Country</SelectItem>
+                  <SelectItem value="ALL">Todos los stages</SelectItem>
+                  <SelectItem value="IN_COUNTRY_US">📍 In-Market</SelectItem>
+                  <SelectItem value="OUT_COUNTRY_GLOBAL">🌐 Out-of-Market</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={regionFilter} onValueChange={setRegionFilter}>
@@ -290,8 +287,8 @@ export function LeadsTab() {
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Nombre</th>
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Email</th>
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">País</th>
-                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Ruta</th>
-                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Visa</th>
+                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Stage</th>
+                      <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Category</th>
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Score</th>
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Estado</th>
                       <th className="text-left py-2.5 px-3 font-medium text-muted-foreground text-xs">Fecha</th>
@@ -321,7 +318,7 @@ export function LeadsTab() {
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-xs">
-                            {VISA_LABELS[lead.visaType || ''] || lead.visaType || '—'}
+                            {CATEGORY_LABELS[lead.visaType || ''] || lead.visaType || '—'}
                           </td>
                           <td className="py-2.5 px-3">
                             <span className={`text-xs font-semibold ${
@@ -442,11 +439,11 @@ export function LeadsTab() {
 
                 <Separator />
 
-                {/* Visa Type & Source */}
+                {/* Category & Source */}
                 <div className="flex items-center justify-between text-sm">
                   <div>
-                    <span className="text-muted-foreground">Visa: </span>
-                    <span className="font-medium">{VISA_LABELS[selectedLead.visaType || ''] || selectedLead.visaType || '—'}</span>
+                    <span className="text-muted-foreground">Category: </span>
+                    <span className="font-medium">{CATEGORY_LABELS[selectedLead.visaType || ''] || selectedLead.visaType || '—'}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Fuente: </span>

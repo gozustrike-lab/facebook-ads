@@ -304,7 +304,7 @@ export function OverviewTab() {
                       <tr className="border-b border-border">
                         <th className="text-left py-2 px-2 font-medium text-muted-foreground">Nombre</th>
                         <th className="text-left py-2 px-2 font-medium text-muted-foreground">País</th>
-                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Ruta</th>
+                        <th className="text-left py-2 px-2 font-medium text-muted-foreground">Stage</th>
                         <th className="text-left py-2 px-2 font-medium text-muted-foreground">Score</th>
                         <th className="text-left py-2 px-2 font-medium text-muted-foreground">Estado</th>
                         <th className="text-left py-2 px-2 font-medium text-muted-foreground">Fecha</th>
@@ -319,7 +319,7 @@ export function OverviewTab() {
                           <td className="py-2 px-2 text-muted-foreground">{lead.country}</td>
                           <td className="py-2 px-2 text-xs">
                             <span className={lead.route === 'IN_COUNTRY_US' ? 'text-teal-600 dark:text-teal-400' : 'text-amber-600 dark:text-amber-400'}>
-                              {lead.route === 'IN_COUNTRY_US' ? '🇺🇸 In-Country' : '🌍 Out-Country'}
+                              {lead.route === 'IN_COUNTRY_US' ? '📍 In-Market' : '🌐 Out-of-Market'}
                             </span>
                           </td>
                           <td className="py-2 px-2">

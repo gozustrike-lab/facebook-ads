@@ -97,10 +97,10 @@ export function Sidebar() {
             </div>
             <div className="overflow-hidden">
               <SheetTitle className="text-sm font-bold text-sidebar-foreground whitespace-nowrap">
-                ImmiScale v5
+                AdScale OS
               </SheetTitle>
               <p className="text-[10px] text-sidebar-foreground/50 whitespace-nowrap">
-                Meta Engine Global
+                AdScale OS
               </p>
             </div>
           </SheetHeader>
@@ -131,8 +131,8 @@ export function Sidebar() {
               transition={{ delay: 0.1 }}
               className="overflow-hidden"
             >
-              <h1 className="text-sm font-bold text-sidebar-foreground whitespace-nowrap">ImmiScale v5</h1>
-              <p className="text-[10px] text-sidebar-foreground/50 whitespace-nowrap">Meta Engine Global</p>
+              <h1 className="text-sm font-bold text-sidebar-foreground whitespace-nowrap">AdScale OS</h1>
+              <p className="text-[10px] text-sidebar-foreground/50 whitespace-nowrap">AdScale OS</p>
             </motion.div>
           )}
         </div>

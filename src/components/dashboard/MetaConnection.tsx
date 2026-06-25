@@ -1,6 +1,6 @@
 'use client'
 
-// ImmiScale Meta Engine v5 — MetaConnection Rediseñado
+// AdScale OS — MetaConnection Rediseñado
 // Friction-Zero: 1 botón OAuth directo a Facebook Login for Business
 // Mobile-First: Tarjeta minimalista con indicador de estado visual
 // NO depende de Supabase — Usa /api/meta/auth directamente
@@ -107,7 +107,7 @@ export function MetaConnection() {
     setTimeout(() => {
       toast.success('Cuenta de Meta conectada exitosamente')
       queryClient.invalidateQueries({ queryKey: ['meta-status'] })
-      window.history.replaceState({}, '', '/')
+      window.history.replaceState({}, '', '/dashboard')
     }, 100)
   } else if (metaError?.startsWith('meta_')) {
     setTimeout(() => {
@@ -121,7 +121,7 @@ export function MetaConnection() {
       } else {
         toast.error(`Error de autenticación con Meta: ${reason || metaError}`)
       }
-      window.history.replaceState({}, '', '/')
+      window.history.replaceState({}, '', '/dashboard')
     }, 100)
   }
 

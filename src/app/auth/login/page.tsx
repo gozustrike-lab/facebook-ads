@@ -7,7 +7,7 @@
 import { useSupabaseAuth } from '@/hooks/use-supabase-auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Scale, Facebook, Mail, Loader2, AlertTriangle } from 'lucide-react'
+import { Zap, Facebook, Loader2, AlertTriangle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -22,7 +22,7 @@ function LoginForm() {
   // Redirect to dashboard if already logged in
   useEffect(() => {
     if (user) {
-      router.push('/')
+      router.push('/dashboard')
     }
   }, [user, router])
 
@@ -38,7 +38,7 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950 p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -49,15 +49,15 @@ function LoginForm() {
           <CardContent className="p-6 sm:p-8 space-y-6">
             {/* Logo + Title */}
             <div className="text-center space-y-3">
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/25">
-                <Scale className="h-7 w-7 text-white" />
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/25">
+                <Zap className="h-7 w-7 text-white" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">ImmiScale</h1>
-                <p className="text-sm text-muted-foreground">Meta Engine v5</p>
+                <h1 className="text-xl font-bold text-foreground">AdScale OS</h1>
+                <p className="text-sm text-muted-foreground">Universal AI Ads Platform</p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Adquisición multinacional de clientes para abogados de inmigración
+                Automate ad campaigns, qualify leads, and scale budgets — for any industry.
               </p>
             </div>
 
@@ -126,30 +126,10 @@ function LoginForm() {
               </Button>
             </div>
 
-            {/* Divider */}
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border/50" />
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="bg-card px-2 text-muted-foreground">o accede sin autenticación</span>
-              </div>
-            </div>
-
-            {/* Skip login (dev mode) */}
-            <Button
-              onClick={() => router.push('/')}
-              variant="outline"
-              className="w-full py-3 rounded-xl gap-2 text-muted-foreground hover:text-foreground"
-            >
-              <Mail className="h-4 w-4" />
-              Entrar al Dashboard
-            </Button>
-
             {/* Footer */}
             <p className="text-[10px] text-center text-muted-foreground leading-relaxed">
-              Al continuar, aceptas nuestros Términos de Servicio y Política de Privacidad.
-              Tus datos están protegidos con encriptación de grado militar.
+              By continuing, you agree to our Terms of Service and Privacy Policy.
+              Your data is protected with enterprise-grade encryption.
             </p>
           </CardContent>
         </Card>
@@ -162,8 +142,8 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-blue-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
-        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+        <Loader2 className="h-8 w-8 animate-spin text-violet-600" />
       </div>
     }>
       <LoginForm />

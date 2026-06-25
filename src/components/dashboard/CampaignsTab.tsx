@@ -1,6 +1,6 @@
 'use client'
 
-// ImmiScale Meta Engine v5 — CampaignsTab Rediseñado
+// AdScale OS — CampaignsTab Rediseñado
 // 3 Modos Express: IA Express, Clonar Ganador, Plantilla Express
 // Mobile-First: Tarjetas táctiles de 1 toque
 

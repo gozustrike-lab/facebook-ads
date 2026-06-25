@@ -1,6 +1,6 @@
 'use client'
 
-// ImmiScale Meta Engine v5 — SettingsTab Rediseñado
+// AdScale OS — SettingsTab Rediseñado
 // Friction-Zero: Solo 2 secciones limpias
 // Eliminado: Health checks, reglas de automatización, registro CAPI
 

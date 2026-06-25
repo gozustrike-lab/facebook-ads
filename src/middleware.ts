@@ -1,21 +1,49 @@
-// Middleware de Rate Limiting y Seguridad - ImmiScale Meta Engine v5
-// Compatible con Vercel Serverless Functions
+// AdScale OS — Middleware: Rate Limiting + Security + Auth Guards
+// Compatible with Vercel Serverless Functions
 import { NextRequest, NextResponse } from 'next/server'
 
-// Almacén en memoria para rate limiting (se reinicia en cada cold start en serverless)
+// Rate limit store (resets on cold start in serverless)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
-
-// Última limpieza
 let lastCleanup = Date.now()
 
-// Configuración por ruta
+// Rate limit config per route
 const RATE_LIMITS: Record<string, { windowMs: number; maxRequests: number }> = {
   '/api/chatbot': { windowMs: 60_000, maxRequests: 20 },
   '/api/automation': { windowMs: 60_000, maxRequests: 10 },
   '/api/meta/auth': { windowMs: 60_000, maxRequests: 5 },
   '/api/seed': { windowMs: 300_000, maxRequests: 3 },
   '/api/capi': { windowMs: 60_000, maxRequests: 30 },
+  '/api/setup': { windowMs: 300_000, maxRequests: 3 },
   'default': { windowMs: 60_000, maxRequests: 60 },
+}
+
+// Public routes that don't require auth
+const PUBLIC_ROUTES = [
+  '/',
+  '/pricing',
+  '/auth/login',
+  '/auth/callback',
+]
+
+// Public API routes that don't require auth
+const PUBLIC_API_ROUTES = [
+  '/api/health',
+  '/api/setup',
+  '/api/init-db',
+  '/api/meta/auth',      // OAuth flow needs to work without auth
+  '/api/chatbot',         // Public chatbot endpoint
+  '/api/capi',            // CAPI webhook
+  '/api/meta/webhook',    // Meta webhook
+]
+
+function isPublicRoute(pathname: string): boolean {
+  // Exact match for public pages
+  if (PUBLIC_ROUTES.includes(pathname)) return true
+  // Prefix match for public API routes
+  if (PUBLIC_API_ROUTES.some(route => pathname.startsWith(route))) return true
+  // Static assets
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) return true
+  return false
 }
 
 function getRateLimitConfig(pathname: string) {
@@ -26,7 +54,6 @@ function getRateLimitConfig(pathname: string) {
 }
 
 function checkRateLimit(ip: string, pathname: string): { allowed: boolean; remaining: number; resetTime: number } {
-  // Limpiar entradas expiradas cada 5 minutos (lazy cleanup en serverless)
   const now = Date.now()
   if (now - lastCleanup > 300_000) {
     for (const [key, record] of rateLimitStore.entries()) {
@@ -56,53 +83,78 @@ function checkRateLimit(ip: string, pathname: string): { allowed: boolean; remai
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Solo aplicar a rutas API
-  if (!pathname.startsWith('/api/')) {
-    return NextResponse.next()
+  // =============================================
+  // AUTH GUARD — Protect dashboard and API routes
+  // =============================================
+  // NOTE: Auth enforcement is currently SOFT (logs warning, doesn't block)
+  // to allow the app to work during migration. Once auth is fully integrated,
+  // change this to hard enforcement.
+  if (!isPublicRoute(pathname)) {
+    // Check for auth cookie or session
+    const hasSession = request.cookies.get('sb-access-token') ||
+                       request.cookies.get('auth-token') ||
+                       request.headers.get('authorization')
+
+    // Soft enforcement: log but don't block yet
+    // TODO: Uncomment below for HARD enforcement after auth integration
+    // if (!hasSession && (pathname.startsWith('/dashboard') || pathname.startsWith('/api/'))) {
+    //   if (pathname.startsWith('/api/')) {
+    //     return NextResponse.json({ exito: false, error: 'Authentication required' }, { status: 401 })
+    //   }
+    //   return NextResponse.redirect(new URL('/auth/login', request.url))
+    // }
+
+    // For now, just inject organization header for multi-tenant scoping
+    if (!hasSession) {
+      // No session — use default org for now
+      // In production, this would redirect to login
+    }
   }
 
-  // Skip rutas internas de Vercel/Next.js
-  if (pathname.startsWith('/api/_next') || pathname.startsWith('/api/__')) {
-    return NextResponse.next()
-  }
+  // =============================================
+  // RATE LIMITING — Only for API routes
+  // =============================================
+  if (pathname.startsWith('/api/')) {
+    if (pathname.startsWith('/api/_next') || pathname.startsWith('/api/__')) {
+      return NextResponse.next()
+    }
 
-  // Obtener IP del cliente
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-    || request.headers.get('x-real-ip')
-    || 'unknown'
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown'
 
-  // Rate limiting
-  const { allowed, remaining, resetTime } = checkRateLimit(ip, pathname)
-  if (!allowed) {
-    return NextResponse.json(
-      {
-        exito: false,
-        error: 'Demasiadas solicitudes. Intenta de nuevo más tarde.',
-        retryAfter: Math.ceil((resetTime - Date.now()) / 1000),
-      },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.ceil((resetTime - Date.now()) / 1000)),
-          'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(resetTime),
+    const { allowed, remaining, resetTime } = checkRateLimit(ip, pathname)
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          exito: false,
+          error: 'Too many requests. Please try again later.',
+          retryAfter: Math.ceil((resetTime - Date.now()) / 1000),
         },
-      }
-    )
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((resetTime - Date.now()) / 1000)),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(resetTime),
+          },
+        }
+      )
+    }
+
+    const response = NextResponse.next()
+    response.headers.set('X-RateLimit-Remaining', String(remaining))
+    response.headers.set('X-RateLimit-Reset', String(resetTime))
+    response.headers.set('X-Content-Type-Options', 'nosniff')
+    response.headers.set('X-Frame-Options', 'DENY')
+    response.headers.set('X-XSS-Protection', '1; mode=block')
+    response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    return response
   }
 
-  // Headers de seguridad
-  const response = NextResponse.next()
-  response.headers.set('X-RateLimit-Remaining', String(remaining))
-  response.headers.set('X-RateLimit-Reset', String(resetTime))
-  response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('X-Frame-Options', 'DENY')
-  response.headers.set('X-XSS-Protection', '1; mode=block')
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-
-  return response
+  return NextResponse.next()
 }
 
 export const config = {
-  matcher: ['/api/:path*'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }

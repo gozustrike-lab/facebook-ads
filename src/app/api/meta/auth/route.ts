@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     const host = request.headers.get('host') || 'localhost:3000'
     const protocolo = request.headers.get('x-forwarded-proto') || 'https'
     return NextResponse.redirect(
-      `${protocolo}://${host}/?error=meta_auth_denied&reason=${encodeURIComponent(errorReason)}`
+      `${protocolo}://${host}/dashboard?error=meta_auth_denied&reason=${encodeURIComponent(errorReason)}`
     )
   }
 
@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         const host = request.headers.get('host') || 'localhost:3000'
         const protocolo = request.headers.get('x-forwarded-proto') || 'https'
         return NextResponse.redirect(
-          `${protocolo}://${host}/?error=meta_auth_config`
+          `${protocolo}://${host}/dashboard?error=meta_auth_config`
         )
       }
 
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
         const host = request.headers.get('host') || 'localhost:3000'
         const protocolo = request.headers.get('x-forwarded-proto') || 'https'
         return NextResponse.redirect(
-          `${protocolo}://${host}/?error=meta_token_exchange&reason=${encodeURIComponent(datosToken.error.message)}`
+          `${protocolo}://${host}/dashboard?error=meta_token_exchange&reason=${encodeURIComponent(datosToken.error.message)}`
         )
       }
 
@@ -240,7 +240,7 @@ export async function GET(request: NextRequest) {
       const host = request.headers.get('host') || 'localhost:3000'
       const protocolo = request.headers.get('x-forwarded-proto') || 'https'
       return NextResponse.redirect(
-        `${protocolo}://${host}/?meta_connected=true&account=${encodeURIComponent(adAccountId)}&pixel=${encodeURIComponent(pixelId || '')}`
+        `${protocolo}://${host}/dashboard?meta_connected=true&account=${encodeURIComponent(adAccountId)}&pixel=${encodeURIComponent(pixelId || '')}`
       )
 
     } catch (error) {
@@ -248,7 +248,7 @@ export async function GET(request: NextRequest) {
       const host = request.headers.get('host') || 'localhost:3000'
       const protocolo = request.headers.get('x-forwarded-proto') || 'https'
       return NextResponse.redirect(
-        `${protocolo}://${host}/?error=meta_auth_failed&reason=${encodeURIComponent(error instanceof Error ? error.message : 'Error desconocido')}`
+        `${protocolo}://${host}/dashboard?error=meta_auth_failed&reason=${encodeURIComponent(error instanceof Error ? error.message : 'Error desconocido')}`
       )
     }
   }

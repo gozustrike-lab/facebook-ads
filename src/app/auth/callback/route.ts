@@ -1,4 +1,4 @@
-// ImmiScale v5 — Auth Callback Route
+// AdScale OS — Auth Callback Route
 // Handles OAuth callback from Facebook Login for Business / Google via Supabase
 // Processes both system user tokens (Business) and regular user tokens
 // SAFE: Returns helpful error if Supabase is not configured
@@ -8,18 +8,18 @@ import { createServerSupabaseClient, isSupabaseServerConfigured } from '@/lib/su
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/'
+  const next = searchParams.get('next') ?? '/dashboard'
 
   // Check if Supabase is configured
   if (!isSupabaseServerConfigured()) {
     console.error('Supabase no configurado. Configura NEXT_PUBLIC_SUPABASE_URL y NEXT_PUBLIC_SUPABASE_ANON_KEY en Vercel.')
-    return NextResponse.redirect(`${origin}/?error=supabase_not_configured`)
+    return NextResponse.redirect(`${origin}/auth/login?error=supabase_not_configured`)
   }
 
   if (code) {
     const supabase = await createServerSupabaseClient()
     if (!supabase) {
-      return NextResponse.redirect(`${origin}/?error=supabase_init_failed`)
+      return NextResponse.redirect(`${origin}/auth/login?error=supabase_init_failed`)
     }
 
     const { error } = await supabase.auth.exchangeCodeForSession(code)
@@ -131,5 +131,5 @@ export async function GET(request: Request) {
   }
 
   // Return to home on error
-  return NextResponse.redirect(`${origin}/?error=auth_callback_failed`)
+  return NextResponse.redirect(`${origin}/auth/login?error=auth_callback_failed`)
 }
